@@ -25,7 +25,7 @@ function extractCategoryAndFolder(input: string): { category?: Category, folder?
   const structuralMatch = input.match(/^([^/]{1,30})\s*\/\s*(.*)$/);
   if (!structuralMatch) return { cleanContent: input };
 
-  let header = structuralMatch[1].trim();
+  const header = structuralMatch[1].trim();
   let content = structuralMatch[2].trim();
   if (/^[a-zA-Z]:$|^\/usr|^\/etc|^\/home|^\./.test(header)) return { cleanContent: input };
 
@@ -153,7 +153,7 @@ export async function classifyMemo(input: string): Promise<ClassificationResult>
       subTasks: parsed.subTasks,
       rawInput: input
     };
-  } catch (error: any) {
+  } catch {
     return fallbackClassification(input, today, forcedDate, forcedCategory, forcedFolder);
   }
 }
@@ -170,7 +170,8 @@ function fallbackClassification(input: string, today: string, forcedDate: string
 
   if (input.includes('코드스케치') || /\d{4}\s*[~\-]\s*\d{4}/.test(input)) tags.push('수업');
 
-  let { folder: currentFolder, cleanContent: clean } = extractCategoryAndFolder(input);
+  const { folder: currentFolder, cleanContent: cleanObj } = extractCategoryAndFolder(input);
+  let clean = cleanObj;
   
   // 강제 날짜 제거 및 텍스트 날짜 지시자 제거
   const dateIndicators = /(?:\s|^)(오늘|내일|내일모레|어제|그저께|주말|이번주|다음주)(?:\s|$)/g;

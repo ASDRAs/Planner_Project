@@ -1,6 +1,5 @@
-'use client';
-
-import React from 'react';
+import React, { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 
 interface ConfirmModalProps {
   isOpen: boolean;
@@ -23,7 +22,13 @@ export default function ConfirmModal({
   cancelText = 'Cancel',
   variant = 'danger'
 }: ConfirmModalProps) {
-  if (!isOpen) return null;
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  if (!isOpen || !mounted) return null;
 
   const getVariantStyles = () => {
     switch (variant) {
@@ -50,10 +55,10 @@ export default function ConfirmModal({
     }
   };
 
-  return (
-    <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-zinc-950/40 backdrop-blur-sm animate-in fade-in duration-200" onClick={onCancel}>
+  return createPortal(
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-in fade-in duration-200 overflow-hidden" style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', transform: 'translateZ(0)' }} onClick={onCancel}>
       <div 
-        className="bg-white dark:bg-zinc-900 w-full max-w-sm rounded-[32px] shadow-2xl border border-zinc-100 dark:border-zinc-800 p-8 animate-in zoom-in-95 duration-200 flex flex-col items-center text-center"
+        className="bg-[var(--bg-main)] w-full max-w-sm rounded-[40px] shadow-2xl border-2 border-[var(--eva-purple)]/30 p-8 md:p-10 animate-in zoom-in-95 duration-200 flex flex-col items-center text-center relative z-[10000]"
         onClick={e => e.stopPropagation()}
       >
         {getIcon()}
@@ -81,6 +86,7 @@ export default function ConfirmModal({
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

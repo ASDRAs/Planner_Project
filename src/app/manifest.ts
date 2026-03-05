@@ -2,20 +2,26 @@ import { MetadataRoute } from 'next'
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: 'AI Daily Planner',
-    short_name: 'Planner',
-    description: 'Intelligent AI-driven daily planner and knowledge base',
+    name: 'NEON GENESIS ARCHIVE',
+    short_name: 'ARCHIVE',
+    description: 'Advanced MAGI Protocol - Neural Interface Planner',
     start_url: '/',
     display: 'standalone',
-    background_color: '#ffffff',
-    theme_color: '#2563eb',
+    background_color: '#050505',
+    theme_color: '#a78bfa',
     icons: [
       {
-        src: '/favicon.ico',
+        src: '/icon.svg',
         sizes: 'any',
-        type: 'image/x-icon',
+        type: 'image/svg+xml',
+        purpose: 'maskable',
       },
-      // 실제 배포 시에는 192x192, 512x512 크기의 PNG 아이콘을 public 폴더에 넣는 것이 좋습니다.
+      {
+        src: '/icon.svg',
+        sizes: '512x512',
+        type: 'image/svg+xml',
+        purpose: 'any',
+      }
     ],
   }
 }

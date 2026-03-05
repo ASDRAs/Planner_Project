@@ -3,13 +3,14 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { classifyMemo, ClassificationResult, Category } from '@/lib/classifier';
 import { saveMemo } from '@/lib/storage';
+import { User } from '@supabase/supabase-js';
 
 interface MemoInputProps {
   onSave: () => void;
-  userId?: string;
+  user?: User | null;
 }
 
-export default function MemoInput({ onSave, userId }: MemoInputProps) {
+export default function MemoInput({ onSave, user }: MemoInputProps) {
   const [text, setText] = useState('');
   const [result, setResult] = useState<ClassificationResult | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<Category | null>(null);
@@ -17,6 +18,9 @@ export default function MemoInput({ onSave, userId }: MemoInputProps) {
   const [isSaving, setIsSaving] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const dateInputRefs = useRef<(HTMLInputElement | null)[]>([]);
+
+  const userId = user?.id;
+  const isSpecialUser = user?.email === 'asdra030522@gmail.com';
 
   useEffect(() => {
     if (textareaRef.current) {
@@ -86,9 +90,13 @@ export default function MemoInput({ onSave, userId }: MemoInputProps) {
       setResult(null);
       setSelectedCategory(null);
       onSave();
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Save failed:", error);
-      alert(`저장에 실패했습니다: ${error.message}`);
+      if (error instanceof Error) {
+        alert(`저장에 실패했습니다: ${error.message}`);
+      } else {
+        alert("알 수 없는 오류가 발생했습니다.");
+      }
     } finally {
       setIsSaving(false);
     }
@@ -115,6 +123,12 @@ export default function MemoInput({ onSave, userId }: MemoInputProps) {
           value={text}
           onChange={(e) => setText(e.target.value)}
         />
+        {isSpecialUser && !text && (
+          <div className="absolute left-6 bottom-4 flex items-center gap-2 text-[9px] font-black text-[var(--eva-purple)]/40 uppercase tracking-widest animate-in fade-in duration-700">
+            <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+            Pilot Tip: &quot;수업&quot; 키워드나 시간 형식을 포함하면 자동으로 수업 일정이 구성됩니다.
+          </div>
+        )}
         {(isClassifying || isSaving) && (
           <div className="absolute right-6 bottom-6 flex items-center gap-2">
             <div className="w-5 h-5 border-2 border-[var(--eva-purple)] border-t-[var(--eva-green)] rounded-full animate-spin shadow-[0_0_10px_var(--eva-purple)]" />

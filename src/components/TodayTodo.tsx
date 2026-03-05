@@ -39,7 +39,7 @@ export default function TodayTodo({ memos, onToggle }: TodayTodoProps) {
               )}
             </div>
             <h2 className="text-2xl font-black text-zinc-900 dark:text-white tracking-tighter uppercase italic flex items-center gap-2">
-              Today's Objectives
+              Today&apos;s Objectives
               {hasIncomplete && (
                 <span className="inline-block w-2 h-2 bg-rose-500 rounded-full shadow-[0_0_8px_rgba(244,63,94,0.8)]" />
               )}

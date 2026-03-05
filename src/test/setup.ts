@@ -4,7 +4,7 @@ import { vi } from 'vitest';
 // Mocking Transformers.js pipeline
 vi.mock('@xenova/transformers', () => ({
   pipeline: vi.fn().mockResolvedValue(
-    async (input: string, categories: string[]) => {
+    async (input: string) => {
       const normalizedInput = input.toLowerCase();
       let bestLabel = 'THOUGHT';
       

@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { exportMemosToJson, importMemosFromJson } from '@/lib/storage';
 
 interface DataSyncProps {
@@ -10,8 +11,14 @@ interface DataSyncProps {
 
 export default function DataSync({ onImport, userId }: DataSyncProps) {
   const [isOpen, setIsOpen] = useState(false);
+  const [mounted, setMounted] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -26,6 +33,8 @@ export default function DataSync({ onImport, userId }: DataSyncProps) {
       document.removeEventListener('mousedown', handleClickOutside);
     };
   }, [isOpen]);
+
+  if (!mounted) return null;
 
   const handleExport = () => {
     const json = exportMemosToJson();
@@ -55,8 +64,10 @@ export default function DataSync({ onImport, userId }: DataSyncProps) {
         } else {
           alert('데이터 형식이 올바르지 않습니다.');
         }
-      } catch (err: any) {
-        alert(`가져오기 실패: ${err.message}`);
+      } catch (err: unknown) {
+        if (err instanceof Error) {
+          alert(`가져오기 실패: ${err.message}`);
+        }
       }
     };
     reader.readAsText(file);
@@ -64,8 +75,8 @@ export default function DataSync({ onImport, userId }: DataSyncProps) {
     setIsOpen(false);
   };
 
-  return (
-    <div className="fixed bottom-6 right-6 z-50 font-sans" ref={menuRef}>
+  return createPortal(
+    <div className="fixed bottom-6 right-6 z-[9999] font-sans pointer-events-auto" ref={menuRef} style={{ transform: 'translateZ(0)' }}>
       {/* 팝업 메뉴 */}
       {isOpen && (
         <div className="absolute bottom-16 right-0 mb-2 w-48 bg-white dark:bg-zinc-900 rounded-[24px] shadow-2xl border border-zinc-100 dark:border-zinc-800 p-2 animate-in fade-in zoom-in-95 duration-200">
@@ -89,7 +100,6 @@ export default function DataSync({ onImport, userId }: DataSyncProps) {
 
       {/* 메인 플로팅 버튼 */}
       <div className="relative group">
-        {/* Outer technical ring */}
         <div className={`absolute inset-[-10px] border-2 border-dashed border-[var(--eva-purple)]/40 rounded-full eva-spin-slow transition-opacity duration-500 ${isOpen ? 'opacity-0' : 'opacity-100'}`} />
         
         <button
@@ -103,7 +113,6 @@ export default function DataSync({ onImport, userId }: DataSyncProps) {
           <div className="absolute inset-0 rounded-full bg-gradient-to-br from-[var(--eva-purple)]/20 to-transparent opacity-50" />
           
           <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="relative z-20">
-            {/* Always show + structure */}
             <line x1="12" y1="5" x2="12" y2="19" className={`transition-all duration-500 ${isOpen ? 'text-white' : 'text-[var(--eva-purple)]'}`} />
             <line x1="5" y1="12" x2="19" y2="12" className={`transition-all duration-500 ${isOpen ? 'text-white' : 'text-[var(--eva-purple)]'}`} />
             
@@ -121,6 +130,7 @@ export default function DataSync({ onImport, userId }: DataSyncProps) {
         accept=".json"
         className="hidden"
       />
-    </div>
+    </div>,
+    document.body
   );
 }

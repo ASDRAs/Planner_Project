@@ -44,11 +44,12 @@ export async function POST(req: Request) {
             headers: { 'Content-Type': 'application/json' }
           });
         }
-      } catch (e) { continue; }
+      } catch { continue; }
     }
 
     throw new Error("모든 AI 모델 호출 실패");
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error);
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }

@@ -13,7 +13,6 @@ import {
   useSensor,
   useSensors,
   DragEndEvent,
-  DragStartEvent,
   DragOverlay,
   defaultDropAnimationSideEffects,
   useDroppable,
@@ -22,7 +21,6 @@ import {
   arrayMove,
   SortableContext,
   sortableKeyboardCoordinates,
-  verticalListSortingStrategy,
   rectSortingStrategy,
   useSortable,
 } from '@dnd-kit/sortable';
@@ -193,7 +191,21 @@ export default function MemoList({ memos, onDelete, onRefresh, userId }: MemoLis
   );
 }
 
-function DroppableFolder({ title, folderName, memos, selectedIds, editingId, handleSelect, setEditingId, onDelete, onRefresh, setExpandedMemo, userId }: any) {
+interface DroppableFolderProps {
+  title: string;
+  folderName: string | undefined;
+  memos: Memo[];
+  selectedIds: string[];
+  editingId: string | null;
+  handleSelect: (id: string) => void;
+  setEditingId: (id: string | null) => void;
+  onDelete: (id: string) => void;
+  onRefresh: () => void;
+  setExpandedMemo: (memo: Memo | null) => void;
+  userId?: string;
+}
+
+function DroppableFolder({ title, folderName, memos, selectedIds, editingId, handleSelect, setEditingId, onDelete, onRefresh, setExpandedMemo, userId }: DroppableFolderProps) {
   const { setNodeRef, isOver } = useDroppable({ id: `folder:${folderName || '__none__'}` });
   
   return (
@@ -210,7 +222,7 @@ function DroppableFolder({ title, folderName, memos, selectedIds, editingId, han
         <div className="h-[1px] flex-grow bg-[var(--border-subtle)]" />
       </h3>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6 min-h-[50px]">
-        {memos.map((memo: any) => (
+        {memos.map((memo) => (
           <SortableKnowledgeCard key={memo.id} memo={memo} isSelected={selectedIds.includes(memo.id)} isEditing={editingId === memo.id} onSelect={() => handleSelect(memo.id)} onEdit={() => setEditingId(memo.id)} onCancelEdit={() => setEditingId(null)} onDelete={onDelete} onRefresh={onRefresh} onExpand={() => setExpandedMemo(memo)} userId={userId} />
         ))}
         {isOver && memos.length === 0 && <div className="col-span-full h-20 border-2 border-dashed border-[var(--eva-purple)]/30 rounded-[28px] bg-[var(--eva-purple)]/5 animate-pulse flex items-center justify-center text-[9px] font-black text-[var(--eva-purple)] uppercase tracking-widest">Relocate to {title}</div>}
@@ -219,7 +231,22 @@ function DroppableFolder({ title, folderName, memos, selectedIds, editingId, han
   );
 }
 
-function SortableKnowledgeCard(props: any) {
+interface KnowledgeCardProps {
+  memo: Memo;
+  isSelected: boolean;
+  isEditing: boolean;
+  onSelect: () => void;
+  onEdit: () => void;
+  onCancelEdit: () => void;
+  onDelete: (id: string) => void;
+  onRefresh: () => void;
+  onExpand: () => void;
+  dragHandleProps?: Record<string, unknown>;
+  isOverlay?: boolean;
+  userId?: string;
+}
+
+function SortableKnowledgeCard(props: KnowledgeCardProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: props.memo.id });
   const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.3 : 1, zIndex: isDragging ? 100 : 1 };
   return <div ref={setNodeRef} style={style} {...attributes}><KnowledgeCard {...props} dragHandleProps={listeners} /></div>;
@@ -250,7 +277,7 @@ function MiniMarkdown({ content }: { content: string }) {
   );
 }
 
-function KnowledgeCard({ memo, isSelected, isEditing, onSelect, onEdit, onCancelEdit, onDelete, onRefresh, onExpand, dragHandleProps, isOverlay, userId }: any) {
+function KnowledgeCard({ memo, isSelected, isEditing, onSelect, onEdit, onCancelEdit, onDelete, onRefresh, onExpand, dragHandleProps, isOverlay, userId }: KnowledgeCardProps) {
   const [editContent, setEditContent] = useState(memo.content);
   const [editCategory, setEditCategory] = useState<Category>(memo.category);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -261,11 +288,13 @@ function KnowledgeCard({ memo, isSelected, isEditing, onSelect, onEdit, onCancel
       textareaRef.current.style.height = 'auto';
       textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`;
     }
-    if (isEditing) {
-      setEditContent(memo.content);
-      setEditCategory(memo.category);
-    }
-  }, [isEditing, memo.content, memo.category]);
+  }, [isEditing, editContent]);
+
+  const handleEditStart = () => {
+    setEditContent(memo.content);
+    setEditCategory(memo.category);
+    onEdit();
+  };
 
   const handleUpdate = async () => {
     if (!editContent.trim()) return;
@@ -291,7 +320,7 @@ function KnowledgeCard({ memo, isSelected, isEditing, onSelect, onEdit, onCancel
       <div className={`absolute top-0 left-0 w-1 md:w-1.5 h-full ${getCategoryColor(memo.category)} opacity-40`} />
       <div className={`absolute top-0 right-0 p-2 md:p-3 flex items-center gap-0.5 z-10 ${isEditing ? 'hidden' : ''}`}>
         <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-all mr-1">
-          <button onClick={onEdit} className="p-1.5 md:p-2 text-zinc-400 hover:text-[var(--eva-purple)] transition-colors"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg></button>
+          <button onClick={handleEditStart} className="p-1.5 md:p-2 text-zinc-400 hover:text-[var(--eva-purple)] transition-colors"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg></button>
           <button onClick={() => onDelete(memo.id)} className="p-1.5 md:p-2 text-zinc-400 hover:text-rose-500 transition-colors"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/></svg></button>
         </div>
         <div {...dragHandleProps} style={{ touchAction: 'none' }} className="cursor-grab p-1.5 md:p-2 text-zinc-300 dark:text-zinc-700 hover:text-zinc-500 transition-colors"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><circle cx="9" cy="12" r="1"/><circle cx="9" cy="5" r="1"/><circle cx="9" cy="19" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="15" cy="5" r="1"/><circle cx="15" cy="19" r="1"/></svg></div>

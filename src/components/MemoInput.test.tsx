@@ -27,8 +27,8 @@ describe('MemoInput Component', () => {
     expect(screen.getByText('#네트워크')).toBeInTheDocument();
   });
 
-  it('우선순위가 High인 경우 특별한 표시가 있어야 함', async () => {
-    (classifier.classifyMemo as any).mockResolvedValueOnce({
+  it('우선순위가 High일 경우 특별한 표시가 되어야 함', async () => {
+    (classifier.classifyMemo as import('vitest').Mock).mockResolvedValueOnce({
       category: 'TODO',
       priority: 'High',
       tags: []

@@ -23,8 +23,10 @@ export default function Home() {
     try {
       const data = await fetchMemos(userId);
       setMemos(data);
-    } catch (e: any) {
-      console.error("[Data] Fetch failed:", e.message);
+    } catch (e: unknown) {
+      if (e instanceof Error) {
+        console.error("[Data] Fetch failed:", e.message);
+      }
     } finally {
       setIsSyncing(false);
     }
@@ -41,7 +43,7 @@ export default function Home() {
           setIsAuthReady(true);
           loadData(currentUser?.id);
         }
-      } catch (e) {
+      } catch {
         if (isMounted) {
           setIsAuthReady(true);
           loadData();
@@ -126,7 +128,7 @@ export default function Home() {
       <main className="w-full max-w-[min(1600px,95vw)] flex flex-col gap-[clamp(2rem,5vh,4rem)] p-[clamp(1rem,4vw,4rem)] animate-in fade-in duration-1000 relative z-10">
         <section className="eva-glass p-[clamp(1.5rem,5vw,4rem)] rounded-[clamp(2rem,5vw,4rem)] shadow-2xl border-2">
           <div className="max-w-[1000px] mx-auto">
-            <MemoInput onSave={() => loadData(user?.id)} userId={user?.id} />
+            <MemoInput onSave={() => loadData(user?.id)} user={user} />
           </div>
         </section>
 

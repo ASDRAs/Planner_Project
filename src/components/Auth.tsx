@@ -44,8 +44,10 @@ export default function Auth() {
         if (error) throw error;
         alert('Verification email sent! Please check your inbox.');
       }
-    } catch (error: any) {
-      alert(`Auth Error: ${error.message}`);
+    } catch (error: unknown) {
+      if (error instanceof Error) {
+        alert(`Auth Error: ${error.message}`);
+      }
     } finally {
       setIsLoading(false);
     }
@@ -57,7 +59,7 @@ export default function Auth() {
       setUser(null);
       await supabase.auth.signOut();
       window.location.reload(); // 세션 완전 초기화를 위해 강제 새로고침
-    } catch (error: any) {
+    } catch {
       console.error("Logout failed, forcing reload anyway.");
       window.location.reload();
     }

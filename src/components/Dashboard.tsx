@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { Memo, updateMemo } from '@/lib/storage';
+import { Category } from '@/lib/classifier';
 import {
   DndContext,
   closestCenter,
@@ -11,13 +12,11 @@ import {
   useSensor,
   useSensors,
   DragEndEvent,
-  DragStartEvent,
   DragOverlay,
   defaultDropAnimationSideEffects,
   useDroppable,
 } from '@dnd-kit/core';
 import {
-  arrayMove,
   SortableContext,
   sortableKeyboardCoordinates,
   verticalListSortingStrategy,
@@ -77,15 +76,15 @@ export default function Dashboard({ memos, onToggle, onDelete, onRefresh, userId
       const overId = over.id as string;
 
       if (overId.match(/^\d{4}-\d{2}-\d{2}$/)) {
-        const activeMemo = memos.find(m => m.id === activeId);
-        if (activeMemo && activeMemo.targetDate !== overId) {
+        const draggedMemo = memos.find(m => m.id === activeId);
+        if (draggedMemo && draggedMemo.targetDate !== overId) {
           await updateMemo(activeId, { targetDate: overId }, userId);
           onRefresh();
         }
       } else if (activeId !== overId) {
-        const activeMemo = memos.find(m => m.id === activeId);
+        const draggedMemo = memos.find(m => m.id === activeId);
         const overMemo = memos.find(m => m.id === overId);
-        if (activeMemo && overMemo && activeMemo.targetDate !== overMemo.targetDate) {
+        if (draggedMemo && overMemo && draggedMemo.targetDate !== overMemo.targetDate) {
           await updateMemo(activeId, { targetDate: overMemo.targetDate }, userId);
           onRefresh();
         }
@@ -145,7 +144,21 @@ export default function Dashboard({ memos, onToggle, onDelete, onRefresh, userId
   );
 }
 
-function DroppableDateSection({ title, date, memos, onToggle, onDelete, onRefresh, accentColor, showStatus, isYesterday, isToday, userId }: any) {
+interface DroppableDateSectionProps {
+  title: string;
+  date: string;
+  memos: Memo[];
+  onToggle: (id: string) => void;
+  onDelete: (id: string) => void;
+  onRefresh: () => void;
+  accentColor: string;
+  showStatus?: boolean;
+  isYesterday?: boolean;
+  isToday?: boolean;
+  userId?: string;
+}
+
+function DroppableDateSection({ title, date, memos, onToggle, onDelete, onRefresh, accentColor, showStatus, isYesterday, isToday, userId }: DroppableDateSectionProps) {
   const { setNodeRef, isOver } = useDroppable({ id: date });
   const formatDate = (dateStr: string) => {
     const d = new Date(dateStr);
@@ -153,7 +166,7 @@ function DroppableDateSection({ title, date, memos, onToggle, onDelete, onRefres
     return `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, '0')}.${String(d.getDate()).padStart(2, '0')}.(${days[d.getDay()]})`;
   };
 
-  const completedCount = memos.filter((m: any) => m.completed).length;
+  const completedCount = memos.filter((m) => m.completed).length;
   const totalCount = memos.length;
   const progress = totalCount > 0 ? (completedCount / totalCount) * 100 : 0;
 
@@ -187,8 +200,8 @@ function DroppableDateSection({ title, date, memos, onToggle, onDelete, onRefres
       </header>
 
       <div className="grid grid-cols-1 gap-1.5 md:gap-2">
-        <SortableContext items={memos.map((m: any) => m.id)} strategy={verticalListSortingStrategy}>
-          {memos.length === 0 && !isOver ? <EmptyState /> : memos.map((m: any) => <SortableMemoRow key={m.id} memo={m} onToggle={onToggle} onDelete={onDelete} onRefresh={onRefresh} userId={userId} />)}
+        <SortableContext items={memos.map((m) => m.id)} strategy={verticalListSortingStrategy}>
+          {memos.length === 0 && !isOver ? <EmptyState /> : memos.map((m) => <SortableMemoRow key={m.id} memo={m} onToggle={onToggle} onDelete={onDelete} onRefresh={onRefresh} userId={userId} />)}
           {isOver && memos.length === 0 && <div className="h-14 border-2 border-dashed border-[var(--eva-purple)]/30 rounded-2xl bg-[var(--eva-purple)]/5 animate-pulse" />}
         </SortableContext>
       </div>
@@ -196,13 +209,28 @@ function DroppableDateSection({ title, date, memos, onToggle, onDelete, onRefres
   );
 }
 
-function SortableMemoRow(props: any) {
+interface MemoRowProps {
+  memo: Memo;
+  onToggle: (id: string) => void;
+  onDelete: (id: string) => void;
+  onRefresh: () => void;
+  dragHandleProps?: Record<string, unknown>;
+  isOverlay?: boolean;
+  userId?: string;
+}
+
+function SortableMemoRow(props: MemoRowProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: props.memo.id });
-  const style = { transform: CSS.Translate.toString(transform), transition, opacity: isDragging ? 0.3 : 1, zIndex: isDragging ? 100 : 1 };
+  const style = { 
+    transform: CSS.Transform.toString(transform), 
+    transition, 
+    opacity: isDragging ? 0.3 : 1, 
+    zIndex: isDragging ? 100 : 1 
+  };
   return <div ref={setNodeRef} style={style} {...attributes}><MemoRow {...props} dragHandleProps={listeners} /></div>;
 }
 
-function MemoRow({ memo, onToggle, onDelete, onRefresh, dragHandleProps, isOverlay, userId }: any) {
+function MemoRow({ memo, onToggle, onDelete, onRefresh, dragHandleProps, isOverlay, userId }: MemoRowProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [editContent, setEditContent] = useState(memo.content);
   const [editCategory, setEditCategory] = useState<string>(memo.category);
@@ -214,15 +242,17 @@ function MemoRow({ memo, onToggle, onDelete, onRefresh, dragHandleProps, isOverl
       textareaRef.current.style.height = 'auto';
       textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`;
     }
-    if (isEditing) {
-      setEditContent(memo.content);
-      setEditCategory(memo.category);
-    }
-  }, [isEditing, memo.content, memo.category]);
+  }, [isEditing, editContent]);
+
+  const handleEditStart = () => {
+    setEditContent(memo.content);
+    setEditCategory(memo.category);
+    setIsEditing(true);
+  };
 
   const handleUpdate = async () => {
     if (!editContent.trim()) return;
-    await updateMemo(memo.id, { content: editContent.trim(), category: editCategory as any }, userId);
+    await updateMemo(memo.id, { content: editContent.trim(), category: editCategory as Category }, userId);
     setIsEditing(false);
     onRefresh();
   };
@@ -252,7 +282,7 @@ function MemoRow({ memo, onToggle, onDelete, onRefresh, dragHandleProps, isOverl
           <div {...dragHandleProps} style={{ touchAction: 'none' }} className="cursor-grab p-1 md:p-1.5 text-zinc-300 dark:text-zinc-600 hover:text-[var(--eva-purple)] transition-colors"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><circle cx="9" cy="12" r="1"/><circle cx="9" cy="5" r="1"/><circle cx="9" cy="19" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="15" cy="5" r="1"/><circle cx="15" cy="19" r="1"/></svg></div>
           {!isEditing && (
             <div className="flex items-center gap-0 opacity-0 group-hover:opacity-100 transition-all">
-              <button onClick={() => setIsEditing(true)} className="p-1 md:p-1.5 text-zinc-400 hover:text-[var(--eva-purple)] transition-colors"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg></button>
+              <button onClick={handleEditStart} className="p-1 md:p-1.5 text-zinc-400 hover:text-[var(--eva-purple)] transition-colors"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg></button>
               <button onClick={() => onDelete(memo.id)} className="p-1 md:p-1.5 text-zinc-400 hover:text-rose-500 transition-colors"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/></svg></button>
             </div>
           )}
