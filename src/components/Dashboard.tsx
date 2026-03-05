@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { Memo, updateMemo } from '@/lib/storage';
 import { Category } from '@/lib/classifier';
 import {
@@ -35,6 +36,12 @@ interface DashboardProps {
 export default function Dashboard({ memos, onToggle, onDelete, onRefresh, userId }: DashboardProps) {
   const [activeMemo, setActiveMemo] = useState<Memo | null>(null);
   const [showHistory, setShowHistory] = useState(false);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setMounted(true);
+  }, []);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
@@ -119,9 +126,9 @@ export default function Dashboard({ memos, onToggle, onDelete, onRefresh, userId
         </DragOverlay>
       </DndContext>
 
-      {showHistory && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-in fade-in duration-200" onClick={() => setShowHistory(false)}>
-          <div className="bg-[var(--bg-main)] w-full max-w-2xl max-h-[80vh] overflow-y-auto rounded-[40px] shadow-2xl border border-[var(--border-subtle)] p-6 md:p-12 animate-in zoom-in-95 duration-200" onClick={e => e.stopPropagation()}>
+      {showHistory && mounted && createPortal(
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-in fade-in duration-200" style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', transform: 'translateZ(0)' }} onClick={() => setShowHistory(false)}>
+          <div className="bg-[var(--bg-main)] w-full max-w-2xl max-h-[85vh] overflow-y-auto rounded-[40px] shadow-2xl border-2 border-[var(--eva-purple)]/30 p-6 md:p-12 animate-in zoom-in-95 duration-200" onClick={e => e.stopPropagation()}>
             <div className="flex justify-between items-center mb-8 sticky top-0 bg-[var(--bg-main)]/80 backdrop-blur-md py-2 z-10">
               <div className="flex items-center gap-3">
                 <div className="p-2 md:p-3 bg-purple-600 rounded-2xl text-white shadow-xl shadow-purple-500/20"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M12 8v4l3 3"/><circle cx="12" cy="12" r="10"/></svg></div>
@@ -138,7 +145,8 @@ export default function Dashboard({ memos, onToggle, onDelete, onRefresh, userId
               ))}
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

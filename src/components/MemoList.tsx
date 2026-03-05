@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { Memo, updateMemo, mergeMemos, updateMemosOrder } from '@/lib/storage';
 import { Category } from '@/lib/classifier';
 import ConfirmModal from './ConfirmModal';
@@ -41,6 +42,12 @@ export default function MemoList({ memos, onDelete, onRefresh, userId }: MemoLis
   const [activeMemo, setActiveMemo] = useState<Memo | null>(null);
   const [expandedMemo, setExpandedMemo] = useState<Memo | null>(null);
   const [showMergeConfirm, setShowMergeConfirm] = useState(false);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setMounted(true);
+  }, []);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
@@ -166,9 +173,9 @@ export default function MemoList({ memos, onDelete, onRefresh, userId }: MemoLis
         </DragOverlay>
       </DndContext>
 
-      {expandedMemo && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-in fade-in duration-200" onClick={() => setExpandedMemo(null)}>
-          <div className="bg-[var(--bg-main)] w-full max-w-3xl max-h-[85vh] overflow-y-auto rounded-[40px] shadow-2xl border border-[var(--border-subtle)] p-6 md:p-12 animate-in zoom-in-95 duration-200" onClick={e => e.stopPropagation()}>
+      {expandedMemo && mounted && createPortal(
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-in fade-in duration-200" style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', transform: 'translateZ(0)' }} onClick={() => setExpandedMemo(null)}>
+          <div className="bg-[var(--bg-main)] w-full max-w-3xl max-h-[85vh] overflow-y-auto rounded-[40px] shadow-2xl border-2 border-[var(--eva-purple)]/30 p-6 md:p-12 animate-in zoom-in-95 duration-200" onClick={e => e.stopPropagation()}>
             <div className="flex justify-between items-center mb-6 md:mb-8">
               <div className="flex items-center gap-3">
                 <span className="text-[9px] md:text-[10px] font-black text-[var(--eva-purple)] uppercase tracking-[0.2em]">{expandedMemo.category}</span>
@@ -183,7 +190,8 @@ export default function MemoList({ memos, onDelete, onRefresh, userId }: MemoLis
               {expandedMemo.tags.map(tag => <span key={tag} className="text-[8px] md:text-[9px] font-black text-[var(--eva-purple)]/60 bg-[var(--eva-purple)]/5 px-2 py-1 rounded-lg border border-[var(--eva-purple)]/10 uppercase tracking-widest">#{tag}</span>)}
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       <ConfirmModal isOpen={showMergeConfirm} title="Merge Data" message={`Confirming the fusion of ${selectedIds.length} data fragments?`} onConfirm={confirmMerge} onCancel={() => setShowMergeConfirm(false)} confirmText="Execute Fusion" variant="warning" />
