@@ -10,3 +10,11 @@ export function getRelativeDateString(offset: number, baseDate: Date = new Date(
   d.setDate(d.getDate() + offset);
   return getLocalDateString(d);
 }
+
+/**
+ * YYYY-MM-DD 형식을 로컬 자정 기준으로 Date 객체로 변환합니다.
+ * 하이픈(-)을 슬래시(/)로 바꾸면 JS 엔진이 로컬 타임존 자정으로 해석합니다.
+ */
+export function parseLocalDate(dateStr: string): Date {
+  return new Date(dateStr.replace(/-/g, '/'));
+}

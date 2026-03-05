@@ -4,7 +4,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { Memo, updateMemo } from '@/lib/storage';
 import { Category } from '@/lib/classifier';
-import { getLocalDateString, getRelativeDateString } from '@/lib/dateUtils';
+import { getLocalDateString, getRelativeDateString, parseLocalDate } from '@/lib/dateUtils';
 import {
   DndContext,
   closestCenter,
@@ -50,21 +50,10 @@ export default function Dashboard({ memos, onToggle, onDelete, onRefresh, userId
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
   );
 
-  const getTodayStr = () => new Date().toISOString().split('T')[0];
-  const getYesterdayStr = () => {
-    const d = new Date();
-    d.setDate(d.getDate() - 1);
-    return d.toISOString().split('T')[0];
-  };
-  const getTomorrowStr = () => {
-    const d = new Date();
-    d.setDate(d.getDate() + 1);
-    return d.toISOString().split('T')[0];
-  };
-
-  const today = getTodayStr();
-  const yesterday = getYesterdayStr();
-  const tomorrow = getTomorrowStr();
+  // 로컬 시간 기준 날짜 계산
+  const today = getLocalDateString();
+  const yesterday = getRelativeDateString(-1);
+  const tomorrow = getRelativeDateString(1);
 
   const yesterdayMemos = memos.filter(m => m.targetDate === yesterday);
   const todayMemos = memos.filter(m => m.targetDate === today);
@@ -140,7 +129,11 @@ export default function Dashboard({ memos, onToggle, onDelete, onRefresh, userId
             <div className="space-y-10">
               {historyDates.length === 0 ? <div className="py-20 text-center text-[var(--text-primary)]/20 font-black uppercase tracking-[0.4em] text-[9px] italic">No archive data found</div> : historyDates.map(date => (
                 <section key={date} className="space-y-3">
-                  <header className="flex items-center gap-3 border-b border-[var(--border-subtle)] pb-2"><span className="text-[10px] md:text-[11px] font-black text-[var(--eva-purple)] uppercase tracking-[0.2em]">{new Date(date).toLocaleDateString('ko-KR', { year: 'numeric', month: '2-digit', day: '2-digit', weekday: 'short' })}</span></header>
+                  <header className="flex items-center gap-3 border-b border-[var(--border-subtle)] pb-2">
+                    <span className="text-[10px] md:text-[11px] font-black text-[var(--eva-purple)] uppercase tracking-[0.2em]">
+                      {parseLocalDate(date).toLocaleDateString('ko-KR', { year: 'numeric', month: '2-digit', day: '2-digit', weekday: 'short' })}
+                    </span>
+                  </header>
                   <div className="grid grid-cols-1 gap-2">{historyMemos.filter(m => m.targetDate === date).map(m => <MemoRow key={m.id} memo={m} onToggle={onToggle} onDelete={onDelete} onRefresh={onRefresh} userId={userId} />)}</div>
                 </section>
               ))}
@@ -170,7 +163,7 @@ interface DroppableDateSectionProps {
 function DroppableDateSection({ title, date, memos, onToggle, onDelete, onRefresh, accentColor, showStatus, isYesterday, isToday, userId }: DroppableDateSectionProps) {
   const { setNodeRef, isOver } = useDroppable({ id: date });
   const formatDate = (dateStr: string) => {
-    const d = new Date(dateStr);
+    const d = parseLocalDate(dateStr);
     const days = ['일', '월', '화', '수', '목', '금', '토'];
     return `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, '0')}.${String(d.getDate()).padStart(2, '0')}.(${days[d.getDay()]})`;
   };
