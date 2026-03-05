@@ -13,20 +13,15 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "AI Daily Planner",
-  description: "Intelligent AI-driven daily planner and knowledge base",
-  appleWebApp: {
-    capable: true,
-    statusBarStyle: "default",
-    title: "AI Daily Planner",
-  },
-  formatDetection: {
-    telephone: false,
+  title: "NEON GENESIS ARCHIVE",
+  description: "Advanced MAGI Protocol - Neural Interface Planner",
+  icons: {
+    icon: "/icon.svg",
   },
 };
 
 export const viewport: Viewport = {
-  themeColor: "#2563eb",
+  themeColor: "#050505",
   width: "device-width",
   initialScale: 1,
   maximumScale: 1,
@@ -39,26 +34,23 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className="dark" data-theme="dark">
-      <head>
-        <link rel="icon" href="/favicon.ico" sizes="any" />
-      </head>
+    <html lang="en" className="dark overflow-x-hidden" data-theme="dark" style={{ scrollbarGutter: 'stable' }}>
       <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased bg-[var(--bg-main)] text-[var(--text-primary)] relative`}
+        className={`${geistSans.variable} ${geistMono.variable} antialiased bg-[var(--bg-main)] text-[var(--text-primary)] min-h-screen overflow-x-hidden flex flex-col`}
       >
         {/* Issue B: Side Edges Fixed Positioning */}
-        <div className="fixed inset-y-0 left-0 w-8 z-50 pointer-events-none hidden lg:flex flex-col items-center justify-between py-10 opacity-40">
+        <div className="fixed inset-y-0 left-0 w-8 z-50 pointer-events-none hidden 2xl:flex flex-col items-center justify-between py-10 opacity-30">
            <div className="w-[1px] h-full bg-gradient-to-b from-transparent via-[var(--eva-green)] to-transparent" />
         </div>
-        <div className="fixed inset-y-0 right-0 w-8 z-50 pointer-events-none hidden lg:flex flex-col items-center justify-between py-10 opacity-40">
+        <div className="fixed inset-y-0 right-0 w-8 z-50 pointer-events-none hidden 2xl:flex flex-col items-center justify-between py-10 opacity-30">
            <div className="w-[1px] h-full bg-gradient-to-b from-transparent via-[var(--eva-green)] to-transparent" />
         </div>
 
         {/* Background Animation & Scanlines */}
-        <div className="eva-bg-animation" />
-        <div className="eva-scanline" />
+        <div className="eva-bg-animation fixed inset-0 z-[-1]" />
+        <div className="eva-scanline fixed inset-0 z-[1000]" />
         
-        <main className="relative z-10 force-layer">
+        <main className="flex-1 flex flex-col relative z-10 force-layer">
           {children}
         </main>
       </body>

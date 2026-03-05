@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import MemoInput from "@/components/MemoInput";
 import Dashboard from "@/components/Dashboard";
 import MemoList from "@/components/MemoList";
@@ -32,7 +32,6 @@ export default function Home() {
 
   useEffect(() => {
     let isMounted = true;
-
     const initAuth = async () => {
       try {
         const { data: { session } } = await supabase.auth.getSession();
@@ -49,9 +48,7 @@ export default function Home() {
         }
       }
     };
-
     initAuth();
-
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (!isMounted) return;
       const currentUser = session?.user ?? null;
@@ -66,7 +63,6 @@ export default function Home() {
         }
       }
     });
-
     return () => {
       isMounted = false;
       subscription.unsubscribe();
@@ -87,7 +83,7 @@ export default function Home() {
 
   if (!isAuthReady) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-[var(--bg-main)]">
+      <div className="flex flex-1 items-center justify-center">
         <div className="flex flex-col items-center gap-6">
           <div className="w-12 h-12 border-4 border-[var(--eva-purple)] border-t-[var(--eva-green)] rounded-full animate-spin shadow-[0_0_15px_var(--eva-purple)]" />
           <p className="text-[10px] font-black text-[var(--eva-purple)] uppercase tracking-[0.5em] animate-pulse italic">Neural Link established...</p>
@@ -97,70 +93,70 @@ export default function Home() {
   }
 
   return (
-    <div className="flex flex-col items-center w-full relative">
-      {/* Slimmer Navigation Bar with Flicker Fix */}
-      <nav className="w-full border-b border-[var(--border-subtle)] py-4 md:py-6 px-4 md:px-24 flex items-center justify-between sticky top-0 bg-[var(--bg-main)]/80 backdrop-blur-2xl z-40 force-layer">
+    <div className="flex flex-col items-center w-full">
+      {/* Navigation: Responsive height and padding */}
+      <nav className="w-full border-b border-[var(--border-subtle)] py-[clamp(1rem,3vh,1.5rem)] px-[clamp(1rem,5vw,6rem)] flex items-center justify-between sticky top-0 bg-[var(--bg-main)]/80 backdrop-blur-2xl z-40 force-layer">
         <div className="flex items-center gap-4 md:gap-8">
           <div className="flex flex-col items-start leading-none group cursor-default">
-            <span className="eva-title-main text-[6px] md:text-[8px] text-[var(--eva-purple)] opacity-60 tracking-[0.5em] mb-0.5 italic">
+            <span className="eva-title-main text-[clamp(6px,0.6vw,9px)] text-[var(--eva-purple)] opacity-60 tracking-[0.5em] mb-0.5 italic">
               NEON GENESIS
             </span>
             <div className="flex items-end gap-1.5 md:gap-2">
-              <h1 className="eva-title-hero text-2xl md:text-4xl text-[var(--text-primary)] tracking-tighter leading-none drop-shadow-[0_0_15px_rgba(167,139,250,0.2)]">
+              <h1 className="eva-title-hero text-[clamp(1.5rem,3vw,2.5rem)] text-[var(--text-primary)] tracking-tighter leading-none drop-shadow-[0_0_15px_rgba(167,139,250,0.2)]">
                 ARCHIVE
               </h1>
-              <span className="bg-[var(--eva-green)] text-black text-[6px] md:text-[8px] font-black px-1.5 py-0.5 rounded-sm italic mb-0.5 shadow-md shadow-[var(--eva-green)]/20">
+              <span className="bg-[var(--eva-green)] text-black text-[clamp(6px,0.5vw,8px)] font-black px-1.5 py-0.5 rounded-sm italic mb-0.5 shadow-md shadow-[var(--eva-green)]/20">
                 EVA-01
               </span>
             </div>
           </div>
           {isSyncing && (
-              <div className="flex items-center gap-2 px-3 py-1 bg-[var(--eva-purple)]/10 rounded-full border border-[var(--eva-purple)]/20 animate-pulse hidden lg:flex">
-                <div className="w-1.5 h-1.5 bg-[var(--eva-green)] rounded-full shadow-[0_0_8px_var(--eva-green)]" />
-                <span className="text-[8px] font-black text-[var(--eva-purple)] uppercase tracking-[0.3em]">Syncing</span>
-              </div>
-            )}
-          </div>
-          <div className="flex items-center gap-3">
-            <Auth />
-          </div>
-        </nav>
-
-        <main className="w-full max-w-6xl flex flex-col gap-10 md:gap-16 p-4 md:p-20 animate-in fade-in duration-1000 relative z-10">
-          <section className="eva-glass p-6 md:p-20 rounded-[48px] md:rounded-[64px] shadow-2xl border-2">
-            <div className="max-w-3xl mx-auto">
-              <MemoInput onSave={() => loadData(user?.id)} userId={user?.id} />
+            <div className="flex items-center gap-2 px-3 py-1 bg-[var(--eva-purple)]/10 rounded-full border border-[var(--eva-purple)]/20 animate-pulse hidden lg:flex">
+              <div className="w-1.5 h-1.5 bg-[var(--eva-green)] rounded-full shadow-[0_0_8px_var(--eva-green)]" />
+              <span className="text-[8px] font-black text-[var(--eva-purple)] uppercase tracking-[0.3em]">Syncing</span>
             </div>
-          </section>
+          )}
+        </div>
+        <div className="flex items-center gap-3 scale-[clamp(0.8,1vw,1)]">
+          <Auth />
+        </div>
+      </nav>
 
-          <section className="bg-[var(--eva-purple)]/[0.02] dark:bg-[var(--eva-purple)]/[0.06] p-6 md:p-16 rounded-[48px] md:rounded-[56px] border border-[var(--border-subtle)] shadow-sm transition-all group relative overflow-hidden">
-            <div className="absolute top-0 left-0 w-1.5 h-full bg-[var(--eva-purple)] opacity-30 shadow-[0_0_20px_var(--eva-purple)]" />
-            <h2 className="text-base md:text-xl font-black text-[var(--text-primary)] uppercase italic tracking-tighter mb-8 md:mb-10 flex items-center gap-4 font-sans">
-              <span className="p-2.5 md:p-3 bg-purple-700 rounded-2xl text-white shadow-2xl shadow-purple-500/40 group-hover:scale-110 transition-transform duration-500">
-                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
-              </span>
-              Quest Log
-              <span className="text-[8px] md:text-[10px] text-[var(--eva-green)] font-black ml-2 animate-pulse tracking-[0.3em] bg-[var(--eva-green)]/10 px-2.5 py-1 rounded-lg border border-[var(--eva-green)]/20 shadow-[0_0_10px_rgba(74,222,128,0.1)] uppercase italic">Established</span>
-            </h2>
-            <Dashboard memos={memos.filter(m => m.category === 'TODO')} onToggle={handleToggle} onDelete={setDeleteTargetId} onRefresh={() => loadData(user?.id)} userId={user?.id} />
-          </section>
+      {/* Main Content: Adaptive max-width and internal padding */}
+      <main className="w-full max-w-[min(1600px,95vw)] flex flex-col gap-[clamp(2rem,5vh,4rem)] p-[clamp(1rem,4vw,4rem)] animate-in fade-in duration-1000 relative z-10">
+        <section className="eva-glass p-[clamp(1.5rem,5vw,4rem)] rounded-[clamp(2rem,5vw,4rem)] shadow-2xl border-2">
+          <div className="max-w-[1000px] mx-auto">
+            <MemoInput onSave={() => loadData(user?.id)} userId={user?.id} />
+          </div>
+        </section>
 
-          <section className="bg-[var(--eva-green)]/[0.01] dark:bg-[var(--eva-green)]/[0.03] p-6 md:p-16 rounded-[48px] md:rounded-[56px] border border-[var(--border-subtle)] transition-all relative overflow-hidden">
-            <div className="absolute top-0 left-0 w-1.5 h-full bg-[var(--eva-green)] opacity-20 shadow-[0_0_20px_var(--eva-green)]" />
-            <h2 className="text-base md:text-xl font-black text-[var(--text-primary)] uppercase italic tracking-tighter mb-8 md:mb-10 flex items-center gap-4 font-sans">
-              <span className="p-2.5 md:p-3 bg-green-600 rounded-2xl text-white shadow-2xl shadow-green-500/40 font-sans">
-                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
-              </span>
-              Archive Base
-            </h2>
-            <MemoList memos={memos.filter(m => m.category !== 'TODO')} onDelete={setDeleteTargetId} onRefresh={() => loadData(user?.id)} userId={user?.id} />
-          </section>
-        </main>
+        <section className="bg-[var(--eva-purple)]/[0.02] dark:bg-[var(--eva-purple)]/[0.06] p-[clamp(1.5rem,5vw,4rem)] rounded-[clamp(2rem,5vw,3.5rem)] border border-[var(--border-subtle)] shadow-sm transition-all group relative overflow-hidden">
+          <div className="absolute top-0 left-0 w-1.5 h-full bg-[var(--eva-purple)] opacity-30 shadow-[0_0_20px_var(--eva-purple)]" />
+          <h2 className="text-[clamp(1rem,1.5vw,1.25rem)] font-black text-[var(--text-primary)] uppercase italic tracking-tighter mb-[clamp(1.5rem,4vh,2.5rem)] flex items-center gap-4 font-sans">
+            <span className="p-[clamp(0.5rem,1vw,0.75rem)] bg-purple-700 rounded-2xl text-white shadow-2xl shadow-purple-500/40 group-hover:scale-110 transition-transform duration-500">
+              <svg xmlns="http://www.w3.org/2000/svg" className="w-[clamp(14px,1.2vw,18px)] h-[clamp(14px,1.2vw,18px)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+            </span>
+            Quest Log
+            <span className="text-[clamp(8px,0.7vw,10px)] text-[var(--eva-green)] font-black ml-2 animate-pulse tracking-[0.3em] bg-[var(--eva-green)]/10 px-2.5 py-1 rounded-lg border border-[var(--eva-green)]/20 shadow-[0_0_10px_rgba(74,222,128,0.1)] uppercase italic">Established</span>
+          </h2>
+          <Dashboard memos={memos.filter(m => m.category === 'TODO')} onToggle={handleToggle} onDelete={setDeleteTargetId} onRefresh={() => loadData(user?.id)} userId={user?.id} />
+        </section>
 
-        <footer className="mt-auto py-16 md:py-20 border-t border-[var(--border-subtle)] w-full text-center text-[var(--eva-purple)]/30 dark:text-zinc-800 font-black uppercase tracking-[0.5em] text-[8px] md:text-[10px] italic">
-          MAGI SYSTEM STATUS: OPTIMAL • SECURITY LEVEL: AA
-        </footer>
-      </div>
+        <section className="bg-[var(--eva-green)]/[0.01] dark:bg-[var(--eva-green)]/[0.03] p-[clamp(1.5rem,5vw,4rem)] rounded-[clamp(2rem,5vw,3.5rem)] border border-[var(--border-subtle)] transition-all relative overflow-hidden">
+          <div className="absolute top-0 left-0 w-1.5 h-full bg-[var(--eva-green)] opacity-20 shadow-[0_0_20px_var(--eva-green)]" />
+          <h2 className="text-[clamp(1rem,1.5vw,1.25rem)] font-black text-[var(--text-primary)] uppercase italic tracking-tighter mb-[clamp(1.5rem,4vh,2.5rem)] flex items-center gap-4 font-sans">
+            <span className="p-[clamp(0.5rem,1vw,0.75rem)] bg-green-600 rounded-2xl text-white shadow-2xl shadow-green-500/40 font-sans">
+              <svg xmlns="http://www.w3.org/2000/svg" className="w-[clamp(14px,1.2vw,18px)] h-[clamp(14px,1.2vw,18px)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+            </span>
+            Archive Base
+          </h2>
+          <MemoList memos={memos.filter(m => m.category !== 'TODO')} onDelete={setDeleteTargetId} onRefresh={() => loadData(user?.id)} userId={user?.id} />
+        </section>
+      </main>
+
+      <footer className="mt-auto py-[clamp(2rem,8vh,5rem)] border-t border-[var(--border-subtle)] w-full text-center text-[var(--eva-purple)]/30 dark:text-zinc-800 font-black uppercase tracking-[0.5em] text-[clamp(8px,0.7vw,10px)] italic">
+        MAGI SYSTEM STATUS: OPTIMAL • SECURITY LEVEL: AA
+      </footer>
 
       <ConfirmModal 
         isOpen={!!deleteTargetId}
@@ -172,7 +168,6 @@ export default function Home() {
         }}
         onCancel={() => setDeleteTargetId(null)}
       />
-
       <DataSync onImport={() => loadData(user?.id)} userId={user?.id} />
     </div>
   );

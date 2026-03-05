@@ -36,13 +36,10 @@
 
 /* --- Global Reset --- */
 html, body {
-  background-color: var(--bg-main) !important;
-  color: var(--text-primary) !important;
   margin: 0;
   padding: 0;
-  min-height: 100vh;
-  overflow-x: hidden;
-  -webkit-font-smoothing: antialiased;
+  height: 100%;
+  background-color: var(--bg-main) !important;
 }
 
 /* --- Typography --- */
@@ -55,7 +52,6 @@ html, body {
 
 .eva-title-hero {
   font-family: sans-serif;
-  letter-spacing: 0.05em; /* 자간 대폭 축소 */
   font-weight: 900;
   text-transform: uppercase;
   font-style: italic;
@@ -63,14 +59,11 @@ html, body {
 
 /* --- Performance & Flicker Fixes --- */
 .force-layer {
-  transform: translateZ(0); /* GPU 레이어 강제 할당으로 깜빡임 방지 */
+  transform: translateZ(0);
   backface-visibility: hidden;
 }
 
 .eva-bg-animation {
-  position: fixed;
-  inset: 0;
-  z-index: -2;
   background: radial-gradient(circle at 50% 50%, var(--eva-purple) 0%, transparent 70%);
   background-size: 200% 200%;
   opacity: 0.03;
@@ -80,9 +73,6 @@ html, body {
 }
 
 .eva-scanline {
-  position: fixed;
-  inset: 0;
-  z-index: 1000;
   background: linear-gradient(
     to bottom,
     transparent 50%,
@@ -97,26 +87,10 @@ html, body {
   to { transform: translate(2%, 2%) scale(1.05); }
 }
 
-@keyframes spin-slow {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
-}
-
-.eva-spin-slow {
-  animation: spin-slow 15s linear infinite;
-}
-
 /* --- Components --- */
 .eva-glass {
   background: var(--bg-card) !important;
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
   border: 1px solid var(--border-subtle) !important;
-}
-
-.eva-nav-glass {
-  background: var(--bg-card) !important;
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border: 1px solid var(--border-subtle);
 }
