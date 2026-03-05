@@ -1,65 +1,179 @@
-import Image from "next/image";
+'use client';
+
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import MemoInput from "@/components/MemoInput";
+import Dashboard from "@/components/Dashboard";
+import MemoList from "@/components/MemoList";
+import DataSync from "@/components/DataSync";
+import Auth from "@/components/Auth";
+import ConfirmModal from "@/components/ConfirmModal";
+import { fetchMemos, deleteMemo, updateMemo, syncToCloud, Memo } from '@/lib/storage';
+import { supabase } from '@/lib/supabase';
+import { User } from '@supabase/supabase-js';
 
 export default function Home() {
+  const [user, setUser] = useState<User | null>(null);
+  const [memos, setMemos] = useState<Memo[]>([]);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [isAuthReady, setIsAuthReady] = useState(false);
+  const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
+
+  const loadData = useCallback(async (userId?: string) => {
+    setIsSyncing(true);
+    try {
+      const data = await fetchMemos(userId);
+      setMemos(data);
+    } catch (e: any) {
+      console.error("[Data] Fetch failed:", e.message);
+    } finally {
+      setIsSyncing(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const initAuth = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (isMounted) {
+          const currentUser = session?.user ?? null;
+          setUser(currentUser);
+          setIsAuthReady(true);
+          loadData(currentUser?.id);
+        }
+      } catch (e) {
+        if (isMounted) {
+          setIsAuthReady(true);
+          loadData();
+        }
+      }
+    };
+
+    initAuth();
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (!isMounted) return;
+      const currentUser = session?.user ?? null;
+      if (currentUser?.id !== user?.id || event === 'SIGNED_IN' || event === 'INITIAL_SESSION') {
+        setUser(currentUser);
+        setIsAuthReady(true);
+        if (currentUser) {
+          if (event === 'SIGNED_IN') await syncToCloud(currentUser.id);
+          loadData(currentUser.id);
+        } else {
+          loadData();
+        }
+      }
+    });
+
+    return () => {
+      isMounted = false;
+      subscription.unsubscribe();
+    };
+  }, [loadData, user?.id]);
+
+  const handleDelete = async (id: string) => {
+    await deleteMemo(id, user?.id);
+    await loadData(user?.id);
+  };
+
+  const handleToggle = async (id: string) => {
+    const memo = memos.find(m => m.id === id);
+    if (!memo) return;
+    await updateMemo(id, { completed: !memo.completed }, user?.id);
+    await loadData(user?.id);
+  };
+
+  if (!isAuthReady) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-[var(--bg-main)]">
+        <div className="flex flex-col items-center gap-6">
+          <div className="w-12 h-12 border-4 border-[var(--eva-purple)] border-t-[var(--eva-green)] rounded-full animate-spin shadow-[0_0_15px_var(--eva-purple)]" />
+          <p className="text-[10px] font-black text-[var(--eva-purple)] uppercase tracking-[0.5em] animate-pulse italic">Neural Link established...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex min-h-screen w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
+    <div className="flex flex-col items-center w-full relative">
+      {/* Slimmer Navigation Bar with Flicker Fix */}
+      <nav className="w-full border-b border-[var(--border-subtle)] py-4 md:py-6 px-4 md:px-24 flex items-center justify-between sticky top-0 bg-[var(--bg-main)]/80 backdrop-blur-2xl z-40 force-layer">
+        <div className="flex items-center gap-4 md:gap-8">
+          <div className="flex flex-col items-start leading-none group cursor-default">
+            <span className="eva-title-main text-[6px] md:text-[8px] text-[var(--eva-purple)] opacity-60 tracking-[0.5em] mb-0.5 italic">
+              NEON GENESIS
+            </span>
+            <div className="flex items-end gap-1.5 md:gap-2">
+              <h1 className="eva-title-hero text-2xl md:text-4xl text-[var(--text-primary)] tracking-tighter leading-none drop-shadow-[0_0_15px_rgba(167,139,250,0.2)]">
+                ARCHIVE
+              </h1>
+              <span className="bg-[var(--eva-green)] text-black text-[6px] md:text-[8px] font-black px-1.5 py-0.5 rounded-sm italic mb-0.5 shadow-md shadow-[var(--eva-green)]/20">
+                EVA-01
+              </span>
+            </div>
+          </div>
+          {isSyncing && (
+              <div className="flex items-center gap-2 px-3 py-1 bg-[var(--eva-purple)]/10 rounded-full border border-[var(--eva-purple)]/20 animate-pulse hidden lg:flex">
+                <div className="w-1.5 h-1.5 bg-[var(--eva-green)] rounded-full shadow-[0_0_8px_var(--eva-green)]" />
+                <span className="text-[8px] font-black text-[var(--eva-purple)] uppercase tracking-[0.3em]">Syncing</span>
+              </div>
+            )}
+          </div>
+          <div className="flex items-center gap-3">
+            <Auth />
+          </div>
+        </nav>
+
+        <main className="w-full max-w-6xl flex flex-col gap-10 md:gap-16 p-4 md:p-20 animate-in fade-in duration-1000 relative z-10">
+          <section className="eva-glass p-6 md:p-20 rounded-[48px] md:rounded-[64px] shadow-2xl border-2">
+            <div className="max-w-3xl mx-auto">
+              <MemoInput onSave={() => loadData(user?.id)} userId={user?.id} />
+            </div>
+          </section>
+
+          <section className="bg-[var(--eva-purple)]/[0.02] dark:bg-[var(--eva-purple)]/[0.06] p-6 md:p-16 rounded-[48px] md:rounded-[56px] border border-[var(--border-subtle)] shadow-sm transition-all group relative overflow-hidden">
+            <div className="absolute top-0 left-0 w-1.5 h-full bg-[var(--eva-purple)] opacity-30 shadow-[0_0_20px_var(--eva-purple)]" />
+            <h2 className="text-base md:text-xl font-black text-[var(--text-primary)] uppercase italic tracking-tighter mb-8 md:mb-10 flex items-center gap-4 font-sans">
+              <span className="p-2.5 md:p-3 bg-purple-700 rounded-2xl text-white shadow-2xl shadow-purple-500/40 group-hover:scale-110 transition-transform duration-500">
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+              </span>
+              Quest Log
+              <span className="text-[8px] md:text-[10px] text-[var(--eva-green)] font-black ml-2 animate-pulse tracking-[0.3em] bg-[var(--eva-green)]/10 px-2.5 py-1 rounded-lg border border-[var(--eva-green)]/20 shadow-[0_0_10px_rgba(74,222,128,0.1)] uppercase italic">Established</span>
+            </h2>
+            <Dashboard memos={memos.filter(m => m.category === 'TODO')} onToggle={handleToggle} onDelete={setDeleteTargetId} onRefresh={() => loadData(user?.id)} userId={user?.id} />
+          </section>
+
+          <section className="bg-[var(--eva-green)]/[0.01] dark:bg-[var(--eva-green)]/[0.03] p-6 md:p-16 rounded-[48px] md:rounded-[56px] border border-[var(--border-subtle)] transition-all relative overflow-hidden">
+            <div className="absolute top-0 left-0 w-1.5 h-full bg-[var(--eva-green)] opacity-20 shadow-[0_0_20px_var(--eva-green)]" />
+            <h2 className="text-base md:text-xl font-black text-[var(--text-primary)] uppercase italic tracking-tighter mb-8 md:mb-10 flex items-center gap-4 font-sans">
+              <span className="p-2.5 md:p-3 bg-green-600 rounded-2xl text-white shadow-2xl shadow-green-500/40 font-sans">
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+              </span>
+              Archive Base
+            </h2>
+            <MemoList memos={memos.filter(m => m.category !== 'TODO')} onDelete={setDeleteTargetId} onRefresh={() => loadData(user?.id)} userId={user?.id} />
+          </section>
+        </main>
+
+        <footer className="mt-auto py-16 md:py-20 border-t border-[var(--border-subtle)] w-full text-center text-[var(--eva-purple)]/30 dark:text-zinc-800 font-black uppercase tracking-[0.5em] text-[8px] md:text-[10px] italic">
+          MAGI SYSTEM STATUS: OPTIMAL • SECURITY LEVEL: AA
+        </footer>
+      </div>
+
+      <ConfirmModal 
+        isOpen={!!deleteTargetId}
+        title="Purge Fragment"
+        message="Permanently erase this data from MAGI memory core?"
+        onConfirm={() => {
+          if (deleteTargetId) handleDelete(deleteTargetId);
+          setDeleteTargetId(null);
+        }}
+        onCancel={() => setDeleteTargetId(null)}
+      />
+
+      <DataSync onImport={() => loadData(user?.id)} userId={user?.id} />
     </div>
   );
 }

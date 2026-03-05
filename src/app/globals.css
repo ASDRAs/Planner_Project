@@ -1,26 +1,122 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
+@theme {
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+/* --- Core Theme Variables --- */
+:root {
+  --bg-main: #fffbf0;
+  --bg-card: rgba(255, 255, 255, 0.6);
+  --bg-input: rgba(255, 255, 255, 0.8);
+  --text-primary: #2e1065;
+  --text-secondary: #7c2d12;
+  --eva-purple: #6d28d9;
+  --eva-purple-glow: rgba(109, 40, 217, 0.3);
+  --eva-green: #16a34a;
+  --eva-orange: #ea580c;
+  --border-subtle: rgba(109, 40, 217, 0.08);
+  --edge-gradient: linear-gradient(to bottom, #6d28d9, #16a34a, #6d28d9);
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+.dark, [data-theme='dark'] {
+  --bg-main: #050505 !important;
+  --bg-card: rgba(15, 15, 15, 0.85) !important;
+  --bg-input: rgba(25, 25, 25, 0.9) !important;
+  --text-primary: #e9d5ff !important;
+  --text-secondary: #4ade80 !important;
+  --eva-purple: #a78bfa !important;
+  --eva-purple-glow: rgba(167, 139, 250, 0.5);
+  --eva-green: #4ade80 !important;
+  --eva-orange: #fb923c !important;
+  --border-subtle: rgba(167, 139, 250, 0.15) !important;
+  --edge-gradient: linear-gradient(to bottom, #a78bfa, #4ade80, #a78bfa) !important;
+}
+
+/* --- Global Reset --- */
+html, body {
+  background-color: var(--bg-main) !important;
+  color: var(--text-primary) !important;
+  margin: 0;
+  padding: 0;
+  min-height: 100vh;
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* --- Typography --- */
+.eva-title-main {
+  font-family: serif;
+  letter-spacing: 0.15em;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.eva-title-hero {
+  font-family: sans-serif;
+  letter-spacing: 0.05em; /* 자간 대폭 축소 */
+  font-weight: 900;
+  text-transform: uppercase;
+  font-style: italic;
+}
+
+/* --- Performance & Flicker Fixes --- */
+.force-layer {
+  transform: translateZ(0); /* GPU 레이어 강제 할당으로 깜빡임 방지 */
+  backface-visibility: hidden;
+}
+
+.eva-bg-animation {
+  position: fixed;
+  inset: 0;
+  z-index: -2;
+  background: radial-gradient(circle at 50% 50%, var(--eva-purple) 0%, transparent 70%);
+  background-size: 200% 200%;
+  opacity: 0.03;
+  animation: flow 40s infinite alternate ease-in-out;
+  pointer-events: none;
+  will-change: transform;
+}
+
+.eva-scanline {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: linear-gradient(
+    to bottom,
+    transparent 50%,
+    rgba(0, 0, 0, 0.01) 50%
+  );
+  background-size: 100% 4px;
+  pointer-events: none;
+}
+
+@keyframes flow {
+  from { transform: translate(-2%, -2%) scale(1); }
+  to { transform: translate(2%, 2%) scale(1.05); }
+}
+
+@keyframes spin-slow {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.eva-spin-slow {
+  animation: spin-slow 15s linear infinite;
+}
+
+/* --- Components --- */
+.eva-glass {
+  background: var(--bg-card) !important;
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--border-subtle) !important;
+}
+
+.eva-nav-glass {
+  background: var(--bg-card) !important;
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid var(--border-subtle);
 }
