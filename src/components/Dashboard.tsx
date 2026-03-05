@@ -4,6 +4,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { Memo, updateMemo } from '@/lib/storage';
 import { Category } from '@/lib/classifier';
+import { getLocalDateString, getRelativeDateString } from '@/lib/dateUtils';
 import {
   DndContext,
   closestCenter,

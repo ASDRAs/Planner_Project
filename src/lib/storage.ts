@@ -1,5 +1,6 @@
 import { Category, Priority } from './classifier';
 import { supabase } from './supabase';
+import { getLocalDateString } from './dateUtils';
 
 export interface Memo {
   id: string;
@@ -78,7 +79,7 @@ export async function saveMemo(memoData: Partial<Memo>, userId?: string): Promis
     priority: memoData.priority || 'Medium',
     tags: memoData.tags || [],
     createdAt: Date.now(),
-    targetDate: memoData.targetDate || new Date().toISOString().split('T')[0],
+    targetDate: memoData.targetDate || getLocalDateString(),
     completed: false,
     order: maxOrder + 1,
     userId: userId || undefined
@@ -148,7 +149,7 @@ export async function importMemosFromJson(json: string, userId?: string): Promis
       priority: m.priority || "Medium",
       tags: Array.isArray(m.tags) ? m.tags : [],
       createdAt: m.createdAt || Date.now(),
-      targetDate: m.targetDate || new Date().toISOString().split('T')[0],
+      targetDate: m.targetDate || getLocalDateString(),
       completed: !!m.completed,
       folder: m.folder || undefined,
       order: m.order || 0,

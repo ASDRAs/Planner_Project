@@ -4,6 +4,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { classifyMemo, ClassificationResult, Category } from '@/lib/classifier';
 import { saveMemo } from '@/lib/storage';
 import { User } from '@supabase/supabase-js';
+import { getLocalDateString } from '@/lib/dateUtils';
 
 interface MemoInputProps {
   onSave: () => void;
@@ -71,7 +72,7 @@ export default function MemoInput({ onSave, user }: MemoInputProps) {
         ? subTasks 
         : [(isTodo || hasFolder) ? cleanContent : rawInput];
       
-      const finalDates = targetDates && targetDates.length > 0 ? targetDates : [new Date().toISOString().split('T')[0]];
+      const finalDates = targetDates && targetDates.length > 0 ? targetDates : [getLocalDateString()];
 
       for (const content of contentsToSave) {
         for (const date of finalDates) {

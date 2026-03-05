@@ -3,6 +3,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { exportMemosToJson, importMemosFromJson } from '@/lib/storage';
+import { getLocalDateString } from '@/lib/dateUtils';
 
 interface DataSyncProps {
   onImport: () => void;
@@ -42,7 +43,7 @@ export default function DataSync({ onImport, userId }: DataSyncProps) {
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `memos-backup-${new Date().toISOString().split('T')[0]}.json`;
+    link.download = `memos-backup-${getLocalDateString()}.json`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);

@@ -1,5 +1,6 @@
 export type Category = 'STUDY' | 'GAME_DESIGN' | 'VAULT' | 'THOUGHT' | 'TODO';
 export type Priority = 'High' | 'Medium' | 'Low';
+import { getLocalDateString, getRelativeDateString } from './dateUtils';
 
 export interface ClassificationResult {
   category: Category;
@@ -65,16 +66,12 @@ function extractDateStrict(input: string): string | null {
   const year = now.getFullYear();
   
   // 1. 상대 날짜 처리
-  if (input.includes("오늘")) return now.toISOString().split('T')[0];
+  if (input.includes("오늘")) return getLocalDateString();
   if (input.includes("내일")) {
-    const tomorrow = new Date(now);
-    tomorrow.setDate(now.getDate() + 1);
-    return tomorrow.toISOString().split('T')[0];
+    return getRelativeDateString(1);
   }
   if (input.includes("내일모레")) {
-    const dayAfter = new Date(now);
-    dayAfter.setDate(now.getDate() + 2);
-    return dayAfter.toISOString().split('T')[0];
+    return getRelativeDateString(2);
   }
 
   // 2. 고정 날짜 처리
@@ -95,7 +92,7 @@ function extractDateStrict(input: string): string | null {
 
 export async function classifyMemo(input: string): Promise<ClassificationResult> {
   const now = new Date();
-  const today = now.toISOString().split('T')[0];
+  const today = getLocalDateString();
   const dayOfWeek = new Intl.DateTimeFormat('ko-KR', { weekday: 'long' }).format(now);
   const forcedDate = extractDateStrict(input);
 
