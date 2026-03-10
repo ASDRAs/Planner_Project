@@ -9,11 +9,10 @@ interface TodayTodoProps {
 }
 
 export default function TodayTodo({ memos, onToggle }: TodayTodoProps) {
-  const today = new Date().setHours(0, 0, 0, 0);
+  const todayStr = new Date().toISOString().split('T')[0];
   
   const todayTodos = memos.filter(m => {
-    const memoDate = new Date(m.createdAt).setHours(0, 0, 0, 0);
-    return m.category === 'TODO' && memoDate === today;
+    return m.category === 'TODO' && m.targetDate === todayStr;
   });
 
   if (todayTodos.length === 0) return null;

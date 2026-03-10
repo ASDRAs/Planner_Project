@@ -173,6 +173,50 @@ export function exportMemosToJson(): string {
   return JSON.stringify(getLocalMemos(), null, 2); 
 }
 
+export interface SyncResult {
+  ok: boolean;
+  pulled?: number;
+  pushed?: number;
+  conflicts?: number;
+}
+
+/**
+ * Orchestrate synchronization with remote Supabase
+ */
+export async function syncMemos(userId: string): Promise<SyncResult> {
+  try {
+    const local = getLocalMemos();
+    
+    // 1. Push local changes to cloud (upsert)
+    if (local.length > 0) {
+      const { error: pushError } = await withTimeout(
+        supabase.from('memos').upsert(local.map(m => ({ ...m, userId })))
+      );
+      if (pushError) throw pushError;
+    }
+
+    // 2. Pull remote changes
+    const { data: remoteData, error: pullError } = await withTimeout(
+      supabase.from('memos').select('*').eq('userId', userId).order('order', { ascending: true })
+    );
+    if (pullError) throw pullError;
+    
+    if (remoteData) {
+      saveLocalMemos(remoteData as Memo[]);
+      return { 
+        ok: true, 
+        pulled: remoteData.length, 
+        pushed: local.length 
+      };
+    }
+    
+    return { ok: true, pushed: local.length };
+  } catch (e: unknown) {
+    console.error("[Storage] Sync failed:", e);
+    return { ok: false };
+  }
+}
+
 export async function updateMemosOrder(orderedMemos: Memo[], userId?: string): Promise<void> {
   saveLocalMemos(orderedMemos);
   if (userId) {

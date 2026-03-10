@@ -16,6 +16,7 @@ export default function Home() {
   const [memos, setMemos] = useState<Memo[]>([]);
   const [isSyncing, setIsSyncing] = useState(false);
   const [isAuthReady, setIsAuthReady] = useState(false);
+  const [isSyncEnabled, setIsSyncEnabled] = useState(false);
   const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
 
   const loadData = useCallback(async (userId?: string) => {
@@ -32,44 +33,26 @@ export default function Home() {
     }
   }, []);
 
+  // Listen for auth changes from Supabase (standard behavior)
   useEffect(() => {
-    let isMounted = true;
-    const initAuth = async () => {
-      try {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (isMounted) {
-          const currentUser = session?.user ?? null;
-          setUser(currentUser);
-          setIsAuthReady(true);
-          loadData(currentUser?.id);
-        }
-      } catch {
-        if (isMounted) {
-          setIsAuthReady(true);
-          loadData();
-        }
-      }
-    };
-    initAuth();
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (!isMounted) return;
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       const currentUser = session?.user ?? null;
-      if (currentUser?.id !== user?.id || event === 'SIGNED_IN' || event === 'INITIAL_SESSION') {
-        setUser(currentUser);
-        setIsAuthReady(true);
-        if (currentUser) {
-          if (event === 'SIGNED_IN') await syncToCloud(currentUser.id);
-          loadData(currentUser.id);
-        } else {
-          loadData();
-        }
+      setUser(currentUser);
+      setIsAuthReady(true);
+      if (event === 'SIGNED_OUT') {
+        setIsSyncEnabled(false);
+        loadData();
       }
     });
-    return () => {
-      isMounted = false;
-      subscription.unsubscribe();
-    };
-  }, [loadData, user?.id]);
+    return () => subscription.unsubscribe();
+  }, [loadData]);
+
+  const handleAuthChange = useCallback((isValid: boolean, userId: string | null) => {
+    setIsSyncEnabled(isValid);
+    if (isValid && userId) {
+      loadData(userId);
+    }
+  }, [loadData]);
 
   const handleDelete = async (id: string) => {
     await deleteMemo(id, user?.id);
@@ -141,7 +124,14 @@ export default function Home() {
             Quest Log
             <span className="text-[clamp(8px,0.7vw,10px)] text-[var(--eva-green)] font-black ml-2 animate-pulse tracking-[0.3em] bg-[var(--eva-green)]/10 px-2.5 py-1 rounded-lg border border-[var(--eva-green)]/20 shadow-[0_0_10px_rgba(74,222,128,0.1)] uppercase italic">Established</span>
           </h2>
-          <Dashboard memos={memos.filter(m => m.category === 'TODO')} onToggle={handleToggle} onDelete={setDeleteTargetId} onRefresh={() => loadData(user?.id)} userId={user?.id} />
+          <Dashboard 
+            memos={memos.filter(m => m.category === 'TODO')} 
+            onToggle={handleToggle} 
+            onDelete={setDeleteTargetId} 
+            onRefresh={() => loadData(user?.id)} 
+            userId={user?.id} 
+            onAuthChange={handleAuthChange}
+          />
         </section>
 
         <section className="bg-[var(--eva-green)]/[0.01] dark:bg-[var(--eva-green)]/[0.03] p-[clamp(1.5rem,5vw,4rem)] rounded-[clamp(2rem,5vw,3.5rem)] border border-[var(--border-subtle)] transition-all relative overflow-hidden">
@@ -170,7 +160,7 @@ export default function Home() {
         }}
         onCancel={() => setDeleteTargetId(null)}
       />
-      <DataSync onImport={() => loadData(user?.id)} userId={user?.id} />
+      <DataSync onSyncComplete={() => loadData(user?.id)} userId={user?.id} isEnabled={isSyncEnabled} />
     </div>
   );
 }

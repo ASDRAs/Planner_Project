@@ -157,23 +157,35 @@ export default function MemoInput({ onSave, user }: MemoInputProps) {
           ))}
         </div>
 
-        {result && (
-          <div className="flex flex-wrap items-center gap-3 animate-in fade-in slide-in-from-bottom-2">
-            {selectedCategory === 'TODO' && result.targetDates?.map((date, idx) => (
-              <div key={idx} className="relative">
-                <input type="date" ref={el => { dateInputRefs.current[idx] = el; }} value={date} onChange={(e) => updateTargetDate(idx, e.target.value)} className="absolute inset-0 w-0 h-0 opacity-0 overflow-hidden" />
-                <button onClick={() => openDatePicker(idx)} className="text-[10px] md:text-xs font-black text-[var(--eva-purple)] bg-[var(--eva-purple)]/5 px-3 py-2 rounded-lg flex items-center gap-2 border border-[var(--eva-purple)]/10 hover:bg-[var(--eva-purple)]/10 transition-all active:scale-95 uppercase tracking-widest">
-                  <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="18" x="3" y="4" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-                  {date}
-                </button>
-              </div>
-            ))}
-            {result.folder && <span className="text-[10px] md:text-xs font-black text-[var(--eva-purple)] bg-[var(--eva-purple)]/10 px-3 py-2 rounded-lg border border-[var(--eva-purple)]/20 tracking-tighter uppercase italic">📁 {result.folder}</span>}
-            <button onClick={handleSave} disabled={isClassifying || isSaving} className="flex-grow sm:flex-grow-0 px-8 py-3 bg-[var(--eva-purple)] hover:bg-[var(--eva-purple)]/90 text-white text-[10px] font-black rounded-xl transition-all shadow-xl shadow-[var(--eva-purple)]/30 active:scale-95 uppercase tracking-[0.2em] disabled:opacity-30 italic">
-              {isSaving ? 'Synchronizing...' : (isClassifying ? 'Analyzing' : 'Execute Deploy')}
-            </button>
-          </div>
-        )}
+        {result && (() => {
+          const { priority, tags, folder, targetDates } = result;
+          return (
+            <div className="flex flex-wrap items-center gap-3 animate-in fade-in slide-in-from-bottom-2">
+              {selectedCategory === 'TODO' && targetDates?.map((date, idx) => (
+                <div key={idx} className="relative">
+                  <input type="date" ref={el => { dateInputRefs.current[idx] = el; }} value={date} onChange={(e) => updateTargetDate(idx, e.target.value)} className="absolute inset-0 w-0 h-0 opacity-0 overflow-hidden" />
+                  <button onClick={() => openDatePicker(idx)} className="text-[10px] md:text-xs font-black text-[var(--eva-purple)] bg-[var(--eva-purple)]/5 px-3 py-2 rounded-lg flex items-center gap-2 border border-[var(--eva-purple)]/10 hover:bg-[var(--eva-purple)]/10 transition-all active:scale-95 uppercase tracking-widest">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="18" x="3" y="4" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                    {date}
+                  </button>
+                </div>
+              ))}
+              {folder && <span className="text-[10px] md:text-xs font-black text-[var(--eva-purple)] bg-[var(--eva-purple)]/10 px-3 py-2 rounded-lg border border-[var(--eva-purple)]/20 tracking-tighter uppercase italic">📁 {folder}</span>}
+              {tags && tags.map(tag => (
+                <span key={tag} className="text-[10px] md:text-xs font-black text-[var(--eva-green)] bg-[var(--eva-green)]/10 px-3 py-2 rounded-lg border border-[var(--eva-green)]/20 tracking-widest uppercase">#{tag}</span>
+              ))}
+              {priority === 'High' && (
+                <div className="flex items-center gap-2 px-3 py-2 bg-rose-500/10 rounded-lg border border-rose-500/20 animate-in zoom-in-95">
+                  <span className="w-1.5 h-1.5 bg-rose-500 rounded-full shadow-[0_0_8px_rose-500]" />
+                  <span className="text-[8px] font-black text-rose-500 uppercase tracking-widest">High Priority</span>
+                </div>
+              )}
+              <button onClick={handleSave} disabled={isClassifying || isSaving} className="flex-grow sm:flex-grow-0 px-8 py-3 bg-[var(--eva-purple)] hover:bg-[var(--eva-purple)]/90 text-white text-[10px] font-black rounded-xl transition-all shadow-xl shadow-[var(--eva-purple)]/30 active:scale-95 uppercase tracking-[0.2em] disabled:opacity-30 italic">
+                {isSaving ? 'Synchronizing...' : (isClassifying ? 'Analyzing' : 'Execute Deploy')}
+              </button>
+            </div>
+          );
+        })()}
       </div>
     </div>
   );

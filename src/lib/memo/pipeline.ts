@@ -6,6 +6,7 @@ import { classifyWithLLM } from './classify/llm';
 import { getLocalDateString } from '../dateUtils';
 
 export async function processMemo(rawInput: string): Promise<ClassificationResult> {
+  const normalizedInput = rawInput.toLowerCase();
   const now = new Date();
   const today = getLocalDateString();
   const dayOfWeek = new Intl.DateTimeFormat('ko-KR', { weekday: 'long' }).format(now);
@@ -18,30 +19,34 @@ export async function processMemo(rawInput: string): Promise<ClassificationResul
   // 2. Parse Date
   const dateResult = parseDateExpressions(afterFolder, context);
   const targetDates = dateResult.targetDates;
-  const cleanContent = dateResult.cleanedText;
+  // Final cleanup for cleanContent: remove leading/trailing special chars and spaces
+  const cleanContent = dateResult.cleanedText
+    .replace(/^[:\-\s/]+|[:\-\s/]+$/g, '')
+    .trim();
 
   // 3. Rule-based Classification
   const hasDate = dateResult.matchedPatterns.length > 0;
   const ruleResult = classifyByRules(cleanContent, hasDate);
-  const { category: ruleCategory, confidence, reasons } = ruleResult;
+  const { category: ruleCategory, priority: rulePriority, confidence, reasons } = ruleResult;
 
-  // Derive Priority
-  let priority: 'High' | 'Medium' | 'Low' = 'Medium';
-  if (ruleCategory === 'TODO' && /중요|긴급|필수|마감|시험|수업|코드스케치/.test(cleanContent)) {
-    priority = 'High';
-  } else if (rawInput.includes('코드스케치') || /\d{4}\s*[~\-]\s*\d{4}/.test(rawInput)) {
-    priority = 'High';
-  }
-
-  // Derive Tags (simplistic approach for rule-based)
+  // Derive Tags
   const tags: string[] = [];
-  if (rawInput.includes('코드스케치') || /\d{4}\s*[~\-]\s*\d{4}/.test(rawInput)) {
+  if (rawInput.includes('코드스케치') || /\d{4}\s*[~\-]\s*\d{4}/.test(rawInput) || rawInput.includes('수업')) {
     tags.push('수업');
+  }
+  if (normalizedInput.includes('네트워크') || normalizedInput.includes('stp') || normalizedInput.includes('utp')) {
+    tags.push('네트워크');
+  }
+  if (normalizedInput.includes('ai') || normalizedInput.includes('인공지능')) {
+    tags.push('AI');
+  }
+  if (normalizedInput.includes('개발') || normalizedInput.includes('구현')) {
+    tags.push('개발방법론');
   }
 
   const baseResult: ClassificationResult = {
     category: ruleCategory || 'THOUGHT',
-    priority,
+    priority: rulePriority,
     tags,
     targetDates,
     cleanContent,

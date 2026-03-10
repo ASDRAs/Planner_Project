@@ -25,6 +25,9 @@ import {
   useSortable,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+import { validateSession } from '@/lib/supabase';
+
+export type AuthCheckState = "idle" | "checking" | "valid" | "invalid";
 
 interface DashboardProps {
   memos: Memo[];
@@ -32,17 +35,28 @@ interface DashboardProps {
   onDelete: (id: string) => void;
   onRefresh: () => void;
   userId?: string;
+  onAuthChange?: (isValid: boolean, userId: string | null) => void;
 }
 
-export default function Dashboard({ memos, onToggle, onDelete, onRefresh, userId }: DashboardProps) {
+export default function Dashboard({ memos, onToggle, onDelete, onRefresh, userId, onAuthChange }: DashboardProps) {
   const [activeMemo, setActiveMemo] = useState<Memo | null>(null);
   const [showHistory, setShowHistory] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const [authCheck, setAuthCheck] = useState<AuthCheckState>("idle");
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setMounted(true);
-  }, []);
+    
+    const bootstrap = async () => {
+      setAuthCheck("checking");
+      const { isValid, userId: validatedId } = await validateSession();
+      setAuthCheck(isValid ? "valid" : "invalid");
+      if (onAuthChange) onAuthChange(isValid, validatedId);
+    };
+    
+    bootstrap();
+  }, [onAuthChange]);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
@@ -284,8 +298,8 @@ function MemoRow({ memo, onToggle, onDelete, onRefresh, dragHandleProps, isOverl
           <div {...dragHandleProps} style={{ touchAction: 'none' }} className="cursor-grab p-1 md:p-1.5 text-zinc-300 dark:text-zinc-600 hover:text-[var(--eva-purple)] transition-colors"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><circle cx="9" cy="12" r="1"/><circle cx="9" cy="5" r="1"/><circle cx="9" cy="19" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="15" cy="5" r="1"/><circle cx="15" cy="19" r="1"/></svg></div>
           {!isEditing && (
             <div className="flex items-center gap-0 opacity-0 group-hover:opacity-100 transition-all">
-              <button onClick={handleEditStart} className="p-1 md:p-1.5 text-zinc-400 hover:text-[var(--eva-purple)] transition-colors"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg></button>
-              <button onClick={() => onDelete(memo.id)} className="p-1 md:p-1.5 text-zinc-400 hover:text-rose-500 transition-colors"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/></svg></button>
+              <button onClick={handleEditStart} aria-label="Edit" className="p-1 md:p-1.5 text-zinc-400 hover:text-[var(--eva-purple)] transition-colors"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg></button>
+              <button onClick={() => onDelete(memo.id)} aria-label="Delete" className="p-1 md:p-1.5 text-zinc-400 hover:text-rose-500 transition-colors"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/></svg></button>
             </div>
           )}
         </div>

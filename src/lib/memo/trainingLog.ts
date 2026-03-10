@@ -29,7 +29,7 @@ export async function saveTrainingLog(predicted: ClassificationResult, finalMemo
   const diffFlags = {
     categoryChanged: predicted.category !== finalMemo.category,
     folderChanged: predicted.folder !== finalMemo.folder,
-    dateChanged: !predicted.targetDates.includes(finalMemo.targetDate),
+    dateChanged: !(predicted.targetDates || []).includes(finalMemo.targetDate),
   };
 
   const logEntry: TrainingLogEntry = {

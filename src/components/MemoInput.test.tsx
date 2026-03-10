@@ -16,7 +16,7 @@ describe('MemoInput Component', () => {
   it('사용자가 텍스트를 입력하면 STUDY 뱃지가 나타나야 함', async () => {
     render(<MemoInput />);
     
-    const textarea = screen.getByPlaceholderText(/자유롭게 메모를 입력하세요/i);
+    const textarea = screen.getByPlaceholderText(/폴더명/i);
     fireEvent.change(textarea, { target: { value: 'STP : 네트워크 간섭 방지' } });
     
     // Wait for the classifier to be called and UI to update
@@ -36,7 +36,7 @@ describe('MemoInput Component', () => {
 
     render(<MemoInput />);
     
-    const textarea = screen.getByPlaceholderText(/자유롭게 메모를 입력하세요/i);
+    const textarea = screen.getByPlaceholderText(/폴더명/i);
     fireEvent.change(textarea, { target: { value: '내일 시험 공부하기' } });
 
     await waitFor(() => {
@@ -48,14 +48,14 @@ describe('MemoInput Component', () => {
     const onSave = vi.fn();
     render(<MemoInput onSave={onSave} />);
     
-    const textarea = screen.getByPlaceholderText(/자유롭게 메모를 입력하세요/i);
+    const textarea = screen.getByPlaceholderText(/폴더명/i);
     fireEvent.change(textarea, { target: { value: '저장할 메모' } });
 
     await waitFor(() => {
-      expect(screen.getByText('저장')).toBeInTheDocument();
+      expect(screen.getByText(/Deploy/i)).toBeInTheDocument();
     });
 
-    const saveButton = screen.getByText('저장');
+    const saveButton = screen.getByText(/Deploy/i);
     fireEvent.click(saveButton);
 
     expect(textarea).toHaveValue('');
