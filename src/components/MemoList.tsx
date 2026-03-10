@@ -130,8 +130,6 @@ export default function MemoList({ memos, onDelete, onRefresh, userId }: MemoLis
   }, [memos, userId, onRefresh]);
 
   const categories: (Category | 'All')[] = ['STUDY', 'GAME_DESIGN', 'VAULT', 'THOUGHT', 'All'];
-  const folders = Array.from(new Set(filteredMemos.filter(m => m.folder).map(m => m.folder!)));
-  const noFolderMemos = filteredMemos.filter(m => !m.folder);
 
   return (
     <div className="w-full max-w-5xl mx-auto space-y-6 md:space-y-8">

@@ -351,7 +351,7 @@ const MemoRow = React.memo(function MemoRow({ memo, onToggle, onDelete, onRefres
       </div>
     </div>
   );
-}
+});
 
 function EmptyState() {
   return (
