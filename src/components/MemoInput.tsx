@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { classifyMemo, ClassificationResult, Category } from '@/lib/classifier';
 import { saveMemo } from '@/lib/storage';
+import { saveTrainingLog } from '@/lib/memo/trainingLog';
 import { User } from '@supabase/supabase-js';
 import { getLocalDateString } from '@/lib/dateUtils';
 
@@ -76,7 +77,7 @@ export default function MemoInput({ onSave, user }: MemoInputProps) {
 
       for (const content of contentsToSave) {
         for (const date of finalDates) {
-          await saveMemo({
+          const finalMemo = await saveMemo({
             content,
             category: selectedCategory,
             priority,
@@ -84,6 +85,8 @@ export default function MemoInput({ onSave, user }: MemoInputProps) {
             folder: folder || undefined,
             targetDate: date
           }, userId);
+          
+          await saveTrainingLog(result, finalMemo, userId);
         }
       }
 
