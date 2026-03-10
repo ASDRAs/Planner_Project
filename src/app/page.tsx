@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import MemoInput from "@/components/MemoInput";
 import Dashboard from "@/components/Dashboard";
 import MemoList from "@/components/MemoList";
