@@ -17,6 +17,8 @@ export default function Home() {
   const [isSyncing, setIsSyncing] = useState(false);
   const [showSyncing, setShowSyncing] = useState(false);
   const [isAuthReady, setIsAuthReady] = useState(false);
+  const [isSyncEnabled, setIsSyncEnabled] = useState(false);
+  const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
   
   // Use a ref to track the last sync start time
   const syncStartTimeRef = useRef<number>(0);
