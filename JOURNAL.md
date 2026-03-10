@@ -20,15 +20,18 @@
 - [x] **Phase 5: Rule-based Classifier with Confidence** (Done)
 - [x] **Phase 6: Training Log System Integration** (Done)
 - [x] **Phase 7: Modular Pipeline Integration** (Done)
-- [ ] **Verification: Red-Green-Refactor Validation of Pipeline** (In-Progress)
+- [x] **Verification: Red-Green-Refactor Validation of Pipeline** (Done)
 
 ## Key Findings & Architectural Notes
 - **Modular Pipeline**: `src/lib/memo/` 하위로 모든 파싱/분류 로직을 위임하여 `classifier.ts`는 이제 가벼운 Facade 역할만 수행합니다.
 - **Spec-First Strategy**: 모든 파이프라인 단계(`folder`, `date`, `rules`)는 독립적인 `.test.ts` 파일을 통해 스펙이 정의되었습니다.
 - **LLM Fallback**: 규칙 기반 확신도(confidence)가 0.75 미만일 때만 API를 호출하도록 설계되어 비용과 속도를 최적화했습니다.
+- **Robust Parsing**: 폴더 구분자(`/`)는 이제 CLI 플래그나 날짜와 혼동되지 않도록 공백을 포함한 형태(` / `)로 감지됩니다.
+- **Date Consistency**: `TodayTodo.tsx`와 `storage.ts` 등 모든 날짜 비교 로직이 `getLocalDateString()`을 사용하여 타임존 오류를 방지합니다.
 
 ## Last Successful Checkpoint
-- Pipeline refactoring complete and basic integration tests passed.
+- Full pipeline validation complete. 58/58 tests passing.
+- UI components (Dashboard, MemoInput, MemoList, TodayTodo) verified with unit tests.
 
 
 ## Key Findings & Architectural Notes

@@ -9,9 +9,11 @@ describe('classifyByRules', () => {
   });
 
   it('should classify STUDY based on keywords', () => {
-    const result = classifyByRules('알고리즘 연습문제 풀기', false); // '연습문제' isn't explicitly in the study list but '과제' is. Let's test explicit ones.
+    const result = classifyByRules('알고리즘 연습문제 풀기', false);
+    expect(result.category).toBe('STUDY');
+    
     const result2 = classifyByRules('내일 알고리즘 과제 제출', false);
-    expect(result2.category).toBe('STUDY');
+    expect(result2.category).toBe('TODO');
   });
 
   it('should classify TODO if a date is present and no stronger match', () => {

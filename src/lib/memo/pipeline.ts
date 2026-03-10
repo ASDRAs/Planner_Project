@@ -40,8 +40,14 @@ export async function processMemo(rawInput: string): Promise<ClassificationResul
   if (normalizedInput.includes('ai') || normalizedInput.includes('인공지능')) {
     tags.push('AI');
   }
-  if (normalizedInput.includes('개발') || normalizedInput.includes('구현')) {
+  if (normalizedInput.includes('개발') || normalizedInput.includes('구현') || normalizedInput.includes('tdd') || normalizedInput.includes('spec-first')) {
     tags.push('개발방법론');
+  }
+  if (normalizedInput.includes('기획') || normalizedInput.includes('플레이어') || normalizedInput.includes('achievers')) {
+    tags.push('게임기획');
+  }
+  if (normalizedInput.includes('유형') || /성취형|탐험형|사교형|살해형/.test(normalizedInput)) {
+    tags.push('플레이어유형');
   }
 
   const baseResult: ClassificationResult = {

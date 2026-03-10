@@ -25,6 +25,11 @@ const mockMemos: Memo[] = [
 describe('MemoList Component', () => {
   it('메모 목록을 올바르게 렌더링해야 함', () => {
     render(<MemoList memos={mockMemos} onDelete={vi.fn()} onRefresh={vi.fn()} />);
+    
+    // Select 'All' filter to see both STUDY and THOUGHT memos
+    const allFilter = screen.getByRole('button', { name: /All/i });
+    fireEvent.click(allFilter);
+
     expect(screen.getByText('공부 내용')).toBeInTheDocument();
     expect(screen.getByText('생각 정리')).toBeInTheDocument();
     // 카테고리 텍스트는 버튼과 배지 두 군데 이상 존재할 수 있음

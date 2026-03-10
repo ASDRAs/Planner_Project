@@ -2,6 +2,7 @@
 
 import React from 'react';
 import { Memo } from '@/lib/storage';
+import { getLocalDateString } from '@/lib/dateUtils';
 
 interface TodayTodoProps {
   memos: Memo[];
@@ -9,7 +10,7 @@ interface TodayTodoProps {
 }
 
 export default function TodayTodo({ memos, onToggle }: TodayTodoProps) {
-  const todayStr = new Date().toISOString().split('T')[0];
+  const todayStr = getLocalDateString();
   
   const todayTodos = memos.filter(m => {
     return m.category === 'TODO' && m.targetDate === todayStr;

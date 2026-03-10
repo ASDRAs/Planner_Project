@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import MemoInput from "@/components/MemoInput";
 import Dashboard from "@/components/Dashboard";
 import MemoList from "@/components/MemoList";
@@ -72,17 +72,20 @@ export default function Home() {
     loadData(user?.id);
   }, [loadData, user?.id]);
 
-  const handleDelete = async (id: string) => {
+  const handleDelete = useCallback(async (id: string) => {
     await deleteMemo(id, user?.id);
     await loadData(user?.id);
-  };
+  }, [user?.id, loadData]);
 
-  const handleToggle = async (id: string) => {
+  const handleToggle = useCallback(async (id: string) => {
     const memo = memos.find(m => m.id === id);
     if (!memo) return;
     await updateMemo(id, { completed: !memo.completed }, user?.id);
     await loadData(user?.id);
-  };
+  }, [memos, user?.id, loadData]);
+
+  const todoMemos = useMemo(() => memos.filter(m => m.category === 'TODO'), [memos]);
+  const archiveMemos = useMemo(() => memos.filter(m => m.category !== 'TODO'), [memos]);
 
   if (!isAuthReady) {
     return (
@@ -145,7 +148,7 @@ export default function Home() {
             <span className="text-[clamp(8px,0.7vw,10px)] text-[var(--eva-green)] font-black ml-2 animate-pulse tracking-[0.3em] bg-[var(--eva-green)]/10 px-2.5 py-1 rounded-lg border border-[var(--eva-green)]/20 shadow-[0_0_10px_rgba(74,222,128,0.1)] uppercase italic">Established</span>
           </h2>
           <Dashboard 
-            memos={memos.filter(m => m.category === 'TODO')} 
+            memos={todoMemos} 
             onToggle={handleToggle} 
             onDelete={setDeleteTargetId} 
             onRefresh={() => loadData(user?.id)} 
@@ -162,7 +165,7 @@ export default function Home() {
             </span>
             Archive Base
           </h2>
-          <MemoList memos={memos.filter(m => m.category !== 'TODO')} onDelete={setDeleteTargetId} onRefresh={() => loadData(user?.id)} userId={user?.id} />
+          <MemoList memos={archiveMemos} onDelete={setDeleteTargetId} onRefresh={() => loadData(user?.id)} userId={user?.id} />
         </section>
       </main>
 

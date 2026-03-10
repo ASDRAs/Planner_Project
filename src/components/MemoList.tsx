@@ -55,33 +55,40 @@ export default function MemoList({ memos, onDelete, onRefresh, userId }: MemoLis
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
   );
 
-  const filteredMemos = memos.filter(m => {
-    const matchesCategory = filter === 'All' || m.category === filter;
-    const query = searchQuery.toLowerCase().trim();
-    if (!query) return matchesCategory;
-    
-    if (query.startsWith('#')) {
-      return matchesCategory && m.tags.some(tag => tag.toLowerCase().includes(query.slice(1)));
-    }
-    return matchesCategory && (
-      m.content.toLowerCase().includes(query) || 
-      m.tags.some(tag => tag.toLowerCase().includes(query)) ||
-      !!(m.folder && m.folder.toLowerCase().includes(query))
-    );
-  });
+  const { filteredMemos, folders, noFolderMemos } = React.useMemo(() => {
+    const filtered = memos.filter(m => {
+      const matchesCategory = filter === 'All' || m.category === filter;
+      const query = searchQuery.toLowerCase().trim();
+      if (!query) return matchesCategory;
+      
+      if (query.startsWith('#')) {
+        return matchesCategory && m.tags.some(tag => tag.toLowerCase().includes(query.slice(1)));
+      }
+      return matchesCategory && (
+        m.content.toLowerCase().includes(query) || 
+        m.tags.some(tag => tag.toLowerCase().includes(query)) ||
+        !!(m.folder && m.folder.toLowerCase().includes(query))
+      );
+    });
 
-  const handleSelect = (id: string) => {
+    const foldersList = Array.from(new Set(filtered.filter(m => m.folder).map(m => m.folder!)));
+    const noFolder = filtered.filter(m => !m.folder);
+
+    return { filteredMemos: filtered, folders: foldersList, noFolderMemos: noFolder };
+  }, [memos, filter, searchQuery]);
+
+  const handleSelect = React.useCallback((id: string) => {
     setSelectedIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
-  };
+  }, []);
 
-  const confirmMerge = async () => {
+  const confirmMerge = React.useCallback(async () => {
     await mergeMemos(selectedIds, userId);
     setSelectedIds([]);
     setShowMergeConfirm(false);
     onRefresh();
-  };
+  }, [selectedIds, userId, onRefresh]);
 
-  const handleDragEnd = async (event: DragEndEvent) => {
+  const handleDragEnd = React.useCallback(async (event: DragEndEvent) => {
     const { active, over } = event;
     setActiveMemo(null);
 
@@ -120,7 +127,7 @@ export default function MemoList({ memos, onDelete, onRefresh, userId }: MemoLis
         }
       }
     }
-  };
+  }, [memos, userId, onRefresh]);
 
   const categories: (Category | 'All')[] = ['STUDY', 'GAME_DESIGN', 'VAULT', 'THOUGHT', 'All'];
   const folders = Array.from(new Set(filteredMemos.filter(m => m.folder).map(m => m.folder!)));

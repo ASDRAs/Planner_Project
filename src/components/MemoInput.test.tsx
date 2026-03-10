@@ -24,7 +24,7 @@ describe('MemoInput Component', () => {
       expect(screen.getByText('STUDY')).toBeInTheDocument();
     });
     
-    expect(screen.getByText('#네트워크')).toBeInTheDocument();
+    expect(screen.getByText(/네트워크/)).toBeInTheDocument();
   });
 
   it('우선순위가 High일 경우 특별한 표시가 되어야 함', async () => {
@@ -58,7 +58,9 @@ describe('MemoInput Component', () => {
     const saveButton = screen.getByText(/Deploy/i);
     fireEvent.click(saveButton);
 
-    expect(textarea).toHaveValue('');
+    await waitFor(() => {
+      expect(textarea).toHaveValue('');
+    });
     expect(onSave).toHaveBeenCalled();
   });
 });

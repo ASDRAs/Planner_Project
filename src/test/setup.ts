@@ -1,6 +1,28 @@
 import '@testing-library/jest-dom';
 import { vi } from 'vitest';
 
+// Mocking fetch globally
+global.fetch = vi.fn((url) => {
+  if (typeof url === 'string' && url.includes('/api/classify')) {
+    return Promise.resolve({
+      ok: true,
+      json: () => Promise.resolve({
+        category: 'STUDY',
+        priority: 'Medium',
+        tags: ['네트워크'],
+        cleanContent: 'Mocked Content'
+      }),
+    });
+  }
+  // Mock Supabase responses
+  return Promise.resolve({
+    ok: true,
+    json: () => Promise.resolve({}),
+    status: 200,
+    statusText: 'OK'
+  });
+}) as any;
+
 // Mocking Transformers.js pipeline
 vi.mock('@xenova/transformers', () => ({
   pipeline: vi.fn().mockResolvedValue(

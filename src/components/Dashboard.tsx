@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { Memo, updateMemo } from '@/lib/storage';
 import { Category } from '@/lib/classifier';
@@ -65,20 +65,34 @@ export default function Dashboard({ memos, onToggle, onDelete, onRefresh, userId
   );
 
   // 로컬 시간 기준 날짜 계산
-  const today = getLocalDateString();
-  const yesterday = getRelativeDateString(-1);
-  const tomorrow = getRelativeDateString(1);
+  const { today, yesterday, tomorrow } = useMemo(() => ({
+    today: getLocalDateString(),
+    yesterday: getRelativeDateString(-1),
+    tomorrow: getRelativeDateString(1)
+  }), []);
 
-  const yesterdayMemos = memos.filter(m => m.targetDate === yesterday);
-  const todayMemos = memos.filter(m => m.targetDate === today);
-  const tomorrowMemos = memos.filter(m => m.targetDate === tomorrow);
-  const upcomingMemosRaw = memos.filter(m => m.targetDate > tomorrow);
-  const upcomingDates = Array.from(new Set(upcomingMemosRaw.map(m => m.targetDate))).sort();
-  
-  const historyMemos = memos.filter(m => m.targetDate < yesterday).sort((a, b) => b.targetDate.localeCompare(a.targetDate));
-  const historyDates = Array.from(new Set(historyMemos.map(m => m.targetDate)));
+  const {
+    yesterdayMemos,
+    todayMemos,
+    tomorrowMemos,
+    upcomingMemosRaw,
+    upcomingDates,
+    historyMemos,
+    historyDates
+  } = useMemo(() => {
+    const yesterdayMemos = memos.filter(m => m.targetDate === yesterday);
+    const todayMemos = memos.filter(m => m.targetDate === today);
+    const tomorrowMemos = memos.filter(m => m.targetDate === tomorrow);
+    const upcomingMemosRaw = memos.filter(m => m.targetDate > tomorrow);
+    const upcomingDates = Array.from(new Set(upcomingMemosRaw.map(m => m.targetDate))).sort();
+    
+    const historyMemos = memos.filter(m => m.targetDate < yesterday).sort((a, b) => b.targetDate.localeCompare(a.targetDate));
+    const historyDates = Array.from(new Set(historyMemos.map(m => m.targetDate)));
 
-  const handleDragEnd = async (event: DragEndEvent) => {
+    return { yesterdayMemos, todayMemos, tomorrowMemos, upcomingMemosRaw, upcomingDates, historyMemos, historyDates };
+  }, [memos, today, yesterday, tomorrow]);
+
+  const handleDragEnd = useCallback(async (event: DragEndEvent) => {
     const { active, over } = event;
     setActiveMemo(null);
 
@@ -101,7 +115,7 @@ export default function Dashboard({ memos, onToggle, onDelete, onRefresh, userId
         }
       }
     }
-  };
+  }, [memos, userId, onRefresh]);
 
   return (
     <div className="w-full max-w-5xl mx-auto space-y-8 md:space-y-10 pb-10 font-sans text-[var(--text-primary)]">
@@ -235,7 +249,7 @@ interface MemoRowProps {
   userId?: string;
 }
 
-function SortableMemoRow(props: MemoRowProps) {
+const SortableMemoRow = React.memo(function SortableMemoRow(props: MemoRowProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: props.memo.id });
   const style = { 
     transform: CSS.Transform.toString(transform), 
@@ -244,9 +258,9 @@ function SortableMemoRow(props: MemoRowProps) {
     zIndex: isDragging ? 100 : 1 
   };
   return <div ref={setNodeRef} style={style} {...attributes}><MemoRow {...props} dragHandleProps={listeners} /></div>;
-}
+});
 
-function MemoRow({ memo, onToggle, onDelete, onRefresh, dragHandleProps, isOverlay, userId }: MemoRowProps) {
+const MemoRow = React.memo(function MemoRow({ memo, onToggle, onDelete, onRefresh, dragHandleProps, isOverlay, userId }: MemoRowProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [editContent, setEditContent] = useState(memo.content);
   const [editCategory, setEditCategory] = useState<string>(memo.category);
