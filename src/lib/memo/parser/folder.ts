@@ -10,8 +10,8 @@ export function parseFolder(input: string): FolderParseResult {
 
   // Regex to match "folder / content" format, accommodating optional spaces around the slash
   // Only match the first slash as the delimiter to handle paths or other slashes in the content.
-  // Exception: if the folder looks like a system path like "C:/" or "/usr", ignore it.
-  const structuralMatch = input.match(/^([^/]{1,30})\s*\/\s*(.*)$/s);
+  // Using [\s\S] instead of /s flag for wider environment compatibility (Next.js build)
+  const structuralMatch = input.match(/^([^/]{1,30})\s*\/\s*([\s\S]*)$/);
   
   if (!structuralMatch) {
     return { content: input.trim() };
