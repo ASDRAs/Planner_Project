@@ -99,12 +99,14 @@ export default function Home() {
               </span>
             </div>
           </div>
-          {isSyncing && (
-            <div className="flex items-center gap-2 px-3 py-1 bg-[var(--eva-purple)]/10 rounded-full border border-[var(--eva-purple)]/20 animate-pulse hidden lg:flex">
-              <div className="w-1.5 h-1.5 bg-[var(--eva-green)] rounded-full shadow-[0_0_8px_var(--eva-green)]" />
+            <div 
+              className={`flex items-center gap-2 px-3 py-1 bg-[var(--eva-purple)]/10 rounded-full border border-[var(--eva-purple)]/20 transition-all duration-1000 ease-in-out hidden lg:flex ${
+                isSyncing ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-1 pointer-events-none'
+              }`}
+            >
+              <div className="w-1.5 h-1.5 bg-[var(--eva-green)] rounded-full shadow-[0_0_8px_var(--eva-green)] animate-pulse" />
               <span className="text-[8px] font-black text-[var(--eva-purple)] uppercase tracking-[0.3em]">Syncing</span>
             </div>
-          )}
         </div>
         <div className="flex items-center gap-3 scale-[clamp(0.8,1vw,1)]">
           <Auth />
