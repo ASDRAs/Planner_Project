@@ -15,6 +15,7 @@ export default function Home() {
   const [user, setUser] = useState<User | null>(null);
   const [memos, setMemos] = useState<Memo[]>([]);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [isBackgroundSyncing, setIsBackgroundSyncing] = useState(false);
   const [showSyncing, setShowSyncing] = useState(false);
   const [isAuthReady, setIsAuthReady] = useState(false);
   const [isSyncEnabled, setIsSyncEnabled] = useState(false);
@@ -22,6 +23,8 @@ export default function Home() {
   
   // Use a ref to track the last sync start time
   const syncStartTimeRef = useRef<number>(0);
+
+  const isAnySyncing = isSyncing || isBackgroundSyncing || showSyncing;
 
   const loadData = useCallback(async (userId?: string) => {
     setIsSyncing(true);
@@ -118,7 +121,7 @@ export default function Home() {
           </div>
             <div 
               className={`flex items-center gap-2 px-3 py-1 bg-[var(--eva-purple)]/10 rounded-full border border-[var(--eva-purple)]/20 transition-all duration-1000 ease-in-out ${
-                showSyncing ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-1 pointer-events-none'
+                isAnySyncing ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-1 pointer-events-none'
               }`}
             >
               <div className="w-1.5 h-1.5 bg-[var(--eva-green)] rounded-full shadow-[0_0_8px_var(--eva-green)] animate-pulse" />
@@ -183,7 +186,12 @@ export default function Home() {
         }}
         onCancel={() => setDeleteTargetId(null)}
       />
-      <DataSync onSyncComplete={handleSyncComplete} userId={user?.id} isEnabled={isSyncEnabled} />
+      <DataSync 
+        onSyncComplete={handleSyncComplete} 
+        userId={user?.id} 
+        isEnabled={isSyncEnabled} 
+        onSyncStateChange={setIsBackgroundSyncing}
+      />
     </div>
   );
 }

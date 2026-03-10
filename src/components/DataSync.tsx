@@ -12,14 +12,21 @@ interface DataSyncProps {
   userId?: string;
   isEnabled?: boolean;
   onAuthFailure?: () => void;
+  onSyncStateChange?: (isSyncing: boolean) => void;
 }
 
-export default function DataSync({ onSyncComplete, userId, isEnabled = true, onAuthFailure }: DataSyncProps) {
+export default function DataSync({ onSyncComplete, userId, isEnabled = true, onAuthFailure, onSyncStateChange }: DataSyncProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [syncStatus, setSyncStatus] = useState<SyncStatus>("idle");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
+  
+  useEffect(() => {
+    if (onSyncStateChange) {
+      onSyncStateChange(syncStatus === "syncing");
+    }
+  }, [syncStatus, onSyncStateChange]);
   
   const isSyncingRef = useRef(false);
   const pollingTimerRef = useRef<NodeJS.Timeout | null>(null);
