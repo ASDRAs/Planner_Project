@@ -23,6 +23,11 @@ export default function DataSync({ onSyncComplete, userId, isEnabled = true, onA
   
   const isSyncingRef = useRef(false);
   const pollingTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const onSyncCompleteRef = useRef(onSyncComplete);
+
+  useEffect(() => {
+    onSyncCompleteRef.current = onSyncComplete;
+  }, [onSyncComplete]);
 
   useEffect(() => {
     setMounted(true);
@@ -38,7 +43,7 @@ export default function DataSync({ onSyncComplete, userId, isEnabled = true, onA
       const result = await syncMemos(userId);
       if (result.ok) {
         setSyncStatus("ready");
-        onSyncComplete();
+        onSyncCompleteRef.current();
       } else {
         setSyncStatus("error");
         // Check if it's an auth failure (simplistic check for now)

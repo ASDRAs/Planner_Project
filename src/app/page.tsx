@@ -54,6 +54,10 @@ export default function Home() {
     }
   }, [loadData]);
 
+  const handleSyncComplete = useCallback(() => {
+    loadData(user?.id);
+  }, [loadData, user?.id]);
+
   const handleDelete = async (id: string) => {
     await deleteMemo(id, user?.id);
     await loadData(user?.id);
@@ -160,7 +164,7 @@ export default function Home() {
         }}
         onCancel={() => setDeleteTargetId(null)}
       />
-      <DataSync onSyncComplete={() => loadData(user?.id)} userId={user?.id} isEnabled={isSyncEnabled} />
+      <DataSync onSyncComplete={handleSyncComplete} userId={user?.id} isEnabled={isSyncEnabled} />
     </div>
   );
 }
