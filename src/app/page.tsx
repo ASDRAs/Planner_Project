@@ -15,12 +15,17 @@ export default function Home() {
   const [user, setUser] = useState<User | null>(null);
   const [memos, setMemos] = useState<Memo[]>([]);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [showSyncing, setShowSyncing] = useState(false);
   const [isAuthReady, setIsAuthReady] = useState(false);
-  const [isSyncEnabled, setIsSyncEnabled] = useState(false);
-  const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
+  
+  // Use a ref to track the last sync start time
+  const syncStartTimeRef = useRef<number>(0);
 
   const loadData = useCallback(async (userId?: string) => {
     setIsSyncing(true);
+    setShowSyncing(true);
+    syncStartTimeRef.current = Date.now();
+
     try {
       const data = await fetchMemos(userId);
       setMemos(data);
@@ -30,6 +35,13 @@ export default function Home() {
       }
     } finally {
       setIsSyncing(false);
+      // Ensure the indicator stays visible for at least 2 seconds for animation
+      const elapsed = Date.now() - syncStartTimeRef.current;
+      const remaining = Math.max(0, 2000 - elapsed);
+      
+      setTimeout(() => {
+        setShowSyncing(false);
+      }, remaining);
     }
   }, []);
 
@@ -100,8 +112,8 @@ export default function Home() {
             </div>
           </div>
             <div 
-              className={`flex items-center gap-2 px-3 py-1 bg-[var(--eva-purple)]/10 rounded-full border border-[var(--eva-purple)]/20 transition-all duration-1000 ease-in-out hidden lg:flex ${
-                isSyncing ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-1 pointer-events-none'
+              className={`flex items-center gap-2 px-3 py-1 bg-[var(--eva-purple)]/10 rounded-full border border-[var(--eva-purple)]/20 transition-all duration-1000 ease-in-out ${
+                showSyncing ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-1 pointer-events-none'
               }`}
             >
               <div className="w-1.5 h-1.5 bg-[var(--eva-green)] rounded-full shadow-[0_0_8px_var(--eva-green)] animate-pulse" />
