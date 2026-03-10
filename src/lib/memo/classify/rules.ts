@@ -1,4 +1,4 @@
-import { Category } from '../types';
+import { Category, Priority } from '../types';
 
 export interface RuleMatchResult {
   category: Category | null;
