@@ -1,4 +1,4 @@
-import { ClassificationResult, ParseContext } from './types';
+import { ClassificationResult, ParseContext, Category } from './types';
 import { parseFolder } from './parser/folder';
 import { parseDateExpressions } from './parser/date';
 import { classifyByRules } from './classify/rules';
