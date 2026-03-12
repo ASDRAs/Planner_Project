@@ -172,7 +172,7 @@ export default function MemoList({ memos, onDelete, onRefresh, userId }: MemoLis
       {mounted && createPortal(
         <DragOverlay dropAnimation={{ sideEffects: defaultDropAnimationSideEffects({ styles: { active: { opacity: '0.5' } } }) }}>
           {activeMemo ? (
-            <div className="w-[300px] pointer-events-none select-none">
+            <div className="w-[clamp(300px,90vw,400px)] pointer-events-none select-none">
               <KnowledgeCard memo={activeMemo} isSelected={selectedIds.includes(activeMemo.id)} isEditing={false} onSelect={() => {}} onEdit={() => {}} onCancelEdit={() => {}} onDelete={() => {}} onRefresh={() => {}} onExpand={() => {}} isOverlay />
             </div>
           ) : null}
