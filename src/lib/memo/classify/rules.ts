@@ -5,13 +5,34 @@ export interface RuleMatchResult {
   priority: Priority;
   confidence: number;
   reasons: string[];
+  stickyFolderContext?: {
+    category: Category;
+    source: 'STUDY_PRIORITY' | 'EXISTING_FOLDER';
+  };
 }
-export function classifyByRules(input: string, hasDate: boolean): RuleMatchResult {
+export function classifyByRules(input: string, hasDate: boolean, folder?: string, existingFolders?: Record<string, Category>): RuleMatchResult {
   const normalized = input.toLowerCase();
   let category: Category | null = null;
   let priority: Priority = 'Medium';
   let confidence = 0.0;
   const reasons: string[] = [];
+  let stickyFolderContext: RuleMatchResult['stickyFolderContext'];
+
+  // Check Sticky Folders first
+  if (folder && existingFolders) {
+    const existingCategory = existingFolders[folder];
+    if (existingCategory) {
+      category = existingCategory;
+      confidence = 0.95;
+      reasons.push(`Folder "${folder}" already exists in ${existingCategory}`);
+      stickyFolderContext = {
+        category: existingCategory,
+        source: existingCategory === 'STUDY' ? 'STUDY_PRIORITY' : 'EXISTING_FOLDER'
+      };
+      
+      // We still run other signal checks for priority, but category is locked
+    }
+  }
 
   // TODO Signals
   const hasTodoVerbs = /사기|하기|가기|오기|제출|준비|버리기|청소|해지|예약|장보기|정비|갱신|답장|전화|주문/.test(normalized);
@@ -35,46 +56,45 @@ export function classifyByRules(input: string, hasDate: boolean): RuleMatchResul
     priority = 'High';
   }
 
-  // Scoring logic (refined)
-  if (isVault) {
-    category = 'VAULT';
-    confidence = 0.9;
-    reasons.push('Matched VAULT keywords');
-  } else if (isGameDesign) {
-    category = 'GAME_DESIGN';
-    confidence = 0.85;
-    reasons.push('Matched GAME_DESIGN keywords');
-  } else if (normalized.includes('과제') || normalized.includes('시험') || normalized.includes('고사')) {
-    // Academic tasks are high confidence STUDY or TODO
-    category = hasTodoVerbs ? 'TODO' : 'STUDY';
-    confidence = 0.9;
-    reasons.push('Matched Academic task keywords');
-  } else if (isThought && normalized.includes('생각')) {
-    category = 'THOUGHT';
-    confidence = 0.9;
-    reasons.push('Matched specific THOUGHT keywords');
-  } else if (isStudy) {
-    category = 'STUDY';
-    confidence = 0.8;
-    reasons.push('Matched STUDY keywords');
-  } else if (isTodo) {
-    category = 'TODO';
-    confidence = hasDate ? 0.9 : 0.75;
-    reasons.push(hasDate ? 'Date present' : 'Matched TODO action verbs');
-  } else if (isThought) {
-    category = 'THOUGHT';
-    confidence = 0.8;
-    reasons.push('Matched THOUGHT keywords');
-  }
-
-
-  // Very ambiguous case fallback handling logic inside LLM if confidence is low, 
-  // but we can start it at THOUGHT if no category matched.
+  // Scoring logic - only if category not already set by sticky folder
   if (!category) {
-    category = 'THOUGHT';
-    confidence = 0.5;
-    reasons.push('No specific keywords matched, defaulting to THOUGHT');
+    if (isVault) {
+      category = 'VAULT';
+      confidence = 0.9;
+      reasons.push('Matched VAULT keywords');
+    } else if (isGameDesign) {
+      category = 'GAME_DESIGN';
+      confidence = 0.85;
+      reasons.push('Matched GAME_DESIGN keywords');
+    } else if (normalized.includes('과제') || normalized.includes('시험') || normalized.includes('고사')) {
+      // Academic tasks are high confidence STUDY or TODO
+      category = hasTodoVerbs ? 'TODO' : 'STUDY';
+      confidence = 0.9;
+      reasons.push('Matched Academic task keywords');
+    } else if (isThought && normalized.includes('생각')) {
+      category = 'THOUGHT';
+      confidence = 0.9;
+      reasons.push('Matched specific THOUGHT keywords');
+    } else if (isStudy) {
+      category = 'STUDY';
+      confidence = 0.8;
+      reasons.push('Matched STUDY keywords');
+    } else if (isTodo) {
+      category = 'TODO';
+      confidence = hasDate ? 0.9 : 0.75;
+      reasons.push(hasDate ? 'Date present' : 'Matched TODO action verbs');
+    } else if (isThought) {
+      category = 'THOUGHT';
+      confidence = 0.8;
+      reasons.push('Matched THOUGHT keywords');
+    }
+
+    if (!category) {
+      category = 'THOUGHT';
+      confidence = 0.5;
+      reasons.push('No specific keywords matched, defaulting to THOUGHT');
+    }
   }
 
-  return { category, priority, confidence, reasons };
+  return { category, priority, confidence, reasons, stickyFolderContext };
 }

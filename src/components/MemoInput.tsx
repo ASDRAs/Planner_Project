@@ -24,16 +24,27 @@ export default function MemoInput({ onSave, user }: MemoInputProps) {
   const userId = user?.id;
   const isSpecialUser = user?.email === 'asdra030522@gmail.com';
 
-  useEffect(() => {
-    if (textareaRef.current) {
-      textareaRef.current.style.height = 'auto';
-      const scrollHeight = textareaRef.current.scrollHeight;
-      const newHeight = Math.max(96, Math.min(scrollHeight, 300));
-      textareaRef.current.style.height = newHeight + 'px';
-    }
-  }, [text]);
-
-  const categories: Category[] = ['STUDY', 'GAME_DESIGN', 'VAULT', 'THOUGHT', 'TODO'];
+  const getExistingFoldersMap = useCallback(() => {
+    const memos = JSON.parse(localStorage.getItem('daily-planner-memos') || '[]');
+    const folderMap: Record<string, Category> = {};
+    
+    // Process in two passes to ensure STUDY priority
+    // Pass 1: Gather everything else
+    memos.forEach((m: any) => {
+      if (m.folder && m.category) {
+        folderMap[m.folder] = m.category;
+      }
+    });
+    
+    // Pass 2: Overwrite with STUDY if it exists anywhere as STUDY
+    memos.forEach((m: any) => {
+      if (m.folder && m.category === 'STUDY') {
+        folderMap[m.folder] = 'STUDY';
+      }
+    });
+    
+    return folderMap;
+  }, []);
 
   const handleClassify = useCallback(async (val: string) => {
     if (!val.trim()) {
@@ -43,7 +54,8 @@ export default function MemoInput({ onSave, user }: MemoInputProps) {
     }
     setIsClassifying(true);
     try {
-      const res = await classifyMemo(val);
+      const folderMap = getExistingFoldersMap();
+      const res = await classifyMemo(val, folderMap);
       setResult(res);
       setSelectedCategory(res.category);
     } catch (e) {
@@ -51,7 +63,7 @@ export default function MemoInput({ onSave, user }: MemoInputProps) {
     } finally {
       setIsClassifying(false);
     }
-  }, []);
+  }, [getExistingFoldersMap]);
 
   useEffect(() => {
     const timer = setTimeout(() => {

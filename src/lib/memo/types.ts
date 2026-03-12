@@ -4,6 +4,7 @@ export type Priority = 'High' | 'Medium' | 'Low';
 export interface ParseContext {
   today: string; // YYYY-MM-DD
   now: Date;
+  existingFolders?: Record<string, Category>;
 }
 
 export interface DateParseResult {
@@ -23,4 +24,8 @@ export interface ClassificationResult {
   rawInput: string;
   confidence?: number;
   reasons?: string[];
+  stickyFolderContext?: {
+    category: Category;
+    source: 'STUDY_PRIORITY' | 'EXISTING_FOLDER';
+  };
 }

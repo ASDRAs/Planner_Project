@@ -5,12 +5,12 @@ import { classifyByRules } from './classify/rules';
 import { classifyWithLLM } from './classify/llm';
 import { getLocalDateString } from '../dateUtils';
 
-export async function processMemo(rawInput: string): Promise<ClassificationResult> {
+export async function processMemo(rawInput: string, existingFolders?: Record<string, Category>): Promise<ClassificationResult> {
   const normalizedInput = rawInput.toLowerCase();
   const now = new Date();
   const today = getLocalDateString();
   const dayOfWeek = new Intl.DateTimeFormat('ko-KR', { weekday: 'long' }).format(now);
-  const context: ParseContext = { today, now };
+  const context: ParseContext = { today, now, existingFolders };
 
   // 1. Parse Folder
   const folderResult = parseFolder(rawInput);
@@ -26,8 +26,8 @@ export async function processMemo(rawInput: string): Promise<ClassificationResul
 
   // 3. Rule-based Classification
   const hasDate = dateResult.matchedPatterns.length > 0;
-  const ruleResult = classifyByRules(cleanContent, hasDate);
-  const { category: ruleCategory, priority: rulePriority, confidence, reasons } = ruleResult;
+  const ruleResult = classifyByRules(cleanContent, hasDate, folder, existingFolders);
+  const { category: ruleCategory, priority: rulePriority, confidence, reasons, stickyFolderContext } = ruleResult;
 
   // Derive Tags
   const tags: string[] = [];
@@ -59,11 +59,12 @@ export async function processMemo(rawInput: string): Promise<ClassificationResul
     folder,
     rawInput,
     confidence,
-    reasons
+    reasons,
+    stickyFolderContext
   };
 
-  // 4. LLM Fallback
-  if (confidence < 0.75) {
+  // 4. LLM Fallback - only if not forced by sticky folder
+  if (confidence < 0.75 && !stickyFolderContext) {
     try {
       const llmResult = await classifyWithLLM(afterFolder, today, dayOfWeek, { forcedCategory: folder, forcedFolder: folder });
       
