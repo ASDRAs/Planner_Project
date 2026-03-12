@@ -135,14 +135,16 @@ export default function Dashboard({ memos, onToggle, onDelete, onRefresh, userId
             <DroppableDateSection key={date} title="Upcoming" date={date} memos={upcomingMemosRaw.filter(m => m.targetDate === date)} onToggle={onToggle} onDelete={onDelete} onRefresh={onRefresh} accentColor="bg-zinc-800 text-white" userId={userId} />
           ))}
         </div>
+      {mounted && createPortal(
         <DragOverlay dropAnimation={{ sideEffects: defaultDropAnimationSideEffects({ styles: { active: { opacity: '0.5' } } }) }}>
-          {activeMemo && mounted ? createPortal(
-            <div className="w-[320px] md:w-[400px] pointer-events-none select-none" style={{ opacity: 0.9 }}>
+          {activeMemo ? (
+            <div className="w-[320px] md:w-[400px] pointer-events-none select-none">
               <MemoRow memo={activeMemo} onToggle={() => {}} onDelete={() => {}} onRefresh={() => {}} isOverlay />
-            </div>,
-            document.body
+            </div>
           ) : null}
-        </DragOverlay>
+        </DragOverlay>,
+        document.body
+      )}
       </DndContext>
 
       {showHistory && mounted && createPortal(
