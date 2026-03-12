@@ -222,6 +222,11 @@ export interface SyncResult {
 
 /**
  * Orchestrate synchronization with remote Supabase
+ * Network Priority Strategy:
+ * 1. Process pending deletions.
+ * 2. Fetch remote data.
+ * 3. Identify local items that are NOT on the server (new items) and push them.
+ * 4. Refresh local data with remote data (remote wins on existing IDs).
  */
 export async function syncMemos(userId: string): Promise<SyncResult> {
   try {
@@ -234,36 +239,43 @@ export async function syncMemos(userId: string): Promise<SyncResult> {
       }
     }
 
-    const local = getLocalMemos();
-    
-    // 2. 로컬 변경사항 푸시 (upsert)
-    if (local.length > 0) {
-      const { error: pushError } = await withTimeout(
-        supabase.from('memos').upsert(local.map(m => ({ ...m, userId })))
-      );
-      if (pushError) throw pushError;
-    }
-
-    // 3. 원격 변경사항 가져오기
+    // 2. 원격 데이터 먼저 가져오기 (네트워크 우선 원칙)
     const { data: remoteData, error: pullError } = await withTimeout(
       supabase.from('memos').select('*').eq('userId', userId).order('order', { ascending: true })
     );
     if (pullError) throw pullError;
+
+    const local = getLocalMemos();
+    const remoteMemos = (remoteData as Memo[]) || [];
+    const remoteIds = new Set(remoteMemos.map(m => m.id));
     
-    if (remoteData) {
-      // 가져온 데이터에서 다시 한 번 로컬 삭제된 항목 필터링 (레이스 컨디션 방지)
-      const currentDeletedIds = getDeletedIds();
-      const filteredData = (remoteData as Memo[]).filter(m => !currentDeletedIds.includes(m.id));
+    // 3. 서버에 없는 새로운 로컬 데이터만 식별하여 푸시
+    const newLocalMemos = local.filter(m => !remoteIds.has(m.id));
+    
+    if (newLocalMemos.length > 0) {
+      const { error: pushError } = await withTimeout(
+        supabase.from('memos').upsert(newLocalMemos.map(m => ({ ...m, userId })))
+      );
+      if (pushError) throw pushError;
       
-      saveLocalMemos(filteredData);
-      return { 
-        ok: true, 
-        pulled: filteredData.length, 
-        pushed: local.length 
-      };
+      // 푸시 후 최신 상태를 다시 가져옴 (방금 추가된 것 포함)
+      const { data: updatedRemoteData, error: finalPullError } = await withTimeout(
+        supabase.from('memos').select('*').eq('userId', userId).order('order', { ascending: true })
+      );
+      if (!finalPullError && updatedRemoteData) {
+        const currentDeletedIds = getDeletedIds();
+        const filteredData = (updatedRemoteData as Memo[]).filter(m => !currentDeletedIds.includes(m.id));
+        saveLocalMemos(filteredData);
+        return { ok: true, pulled: filteredData.length, pushed: newLocalMemos.length };
+      }
     }
+
+    // 4. 로컬 저장소를 서버 데이터로 동기화 (충돌 시 서버 데이터가 덮어씀)
+    const currentDeletedIds = getDeletedIds();
+    const finalFilteredData = remoteMemos.filter(m => !currentDeletedIds.includes(m.id));
+    saveLocalMemos(finalFilteredData);
     
-    return { ok: true, pushed: local.length };
+    return { ok: true, pulled: finalFilteredData.length, pushed: newLocalMemos.length };
   } catch (e: unknown) {
     console.error("[Storage] Sync failed:", e);
     return { ok: false };
