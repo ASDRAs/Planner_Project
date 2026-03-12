@@ -296,7 +296,9 @@ function MiniMarkdown({ content }: { content: string }) {
 function KnowledgeCard({ memo, isSelected, isEditing, onSelect, onEdit, onCancelEdit, onDelete, onRefresh, onExpand, dragHandleProps, isOverlay, userId }: KnowledgeCardProps) {
   const [editContent, setEditContent] = useState(memo.content);
   const [editCategory, setEditCategory] = useState<Category>(memo.category);
+  const [editDate, setEditDate] = useState<string>(memo.targetDate);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const dateInputRef = useRef<HTMLInputElement>(null);
   const isLong = memo.content.split('\n').length > 10;
 
   useEffect(() => {
@@ -309,12 +311,17 @@ function KnowledgeCard({ memo, isSelected, isEditing, onSelect, onEdit, onCancel
   const handleEditStart = () => {
     setEditContent(memo.content);
     setEditCategory(memo.category);
+    setEditDate(memo.targetDate);
     onEdit();
   };
 
   const handleUpdate = async () => {
     if (!editContent.trim()) return;
-    await updateMemo(memo.id, { content: editContent.trim(), category: editCategory }, userId);
+    await updateMemo(memo.id, { 
+      content: editContent.trim(), 
+      category: editCategory,
+      targetDate: editDate
+    }, userId);
     onCancelEdit();
     onRefresh();
   };
@@ -351,14 +358,35 @@ function KnowledgeCard({ memo, isSelected, isEditing, onSelect, onEdit, onCancel
         {isEditing ? (
           <div className="space-y-3 md:space-y-4 flex-grow flex flex-col">
             <div className="flex flex-col gap-1.5 md:gap-2">
-              <label className="text-[8px] md:text-[9px] font-black text-[var(--eva-purple)]/40 uppercase tracking-widest px-1">Category Override</label>
-              <select 
-                value={editCategory} 
-                onChange={(e) => setEditCategory(e.target.value as Category)}
-                className="w-full px-3 md:px-4 py-2 md:py-2.5 bg-[var(--bg-main)] text-[var(--text-primary)] border border-[var(--border-subtle)] rounded-lg md:rounded-xl text-[9px] md:text-[10px] font-black uppercase outline-none focus:ring-2 focus:ring-[var(--eva-purple)]/50 appearance-none cursor-pointer"
-              >
-                {categories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
-              </select>
+              <label className="text-[8px] md:text-[9px] font-black text-[var(--eva-purple)]/40 uppercase tracking-widest px-1">Category & Date</label>
+              <div className="flex flex-wrap items-center gap-2">
+                <select 
+                  value={editCategory} 
+                  onChange={(e) => setEditCategory(e.target.value as Category)}
+                  className="px-3 md:px-4 py-2 md:py-2.5 bg-[var(--bg-main)] text-[var(--text-primary)] border border-[var(--border-subtle)] rounded-lg md:rounded-xl text-[9px] md:text-[10px] font-black uppercase outline-none focus:ring-2 focus:ring-[var(--eva-purple)]/50 appearance-none cursor-pointer"
+                >
+                  {categories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
+                </select>
+
+                {editCategory === 'TODO' && (
+                  <div className="relative">
+                    <input 
+                      type="date" 
+                      ref={dateInputRef} 
+                      value={editDate} 
+                      onChange={(e) => setEditDate(e.target.value)} 
+                      className="absolute inset-0 w-0 h-0 opacity-0 overflow-hidden" 
+                    />
+                    <button 
+                      onClick={() => dateInputRef.current?.showPicker()} 
+                      className="text-[9px] md:text-[10px] font-black text-[var(--eva-purple)] bg-[var(--eva-purple)]/5 px-3 py-2 md:py-2.5 rounded-lg md:rounded-xl flex items-center gap-2 border border-[var(--eva-purple)]/10 hover:bg-[var(--eva-purple)]/10 transition-all uppercase tracking-widest"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="18" x="3" y="4" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                      {editDate}
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
             <textarea ref={textareaRef} value={editContent} onChange={(e) => setEditContent(e.target.value)} className="w-full p-3 md:p-4 text-xs md:text-sm bg-[var(--bg-input)] text-[var(--text-primary)] border border-[var(--eva-purple)]/20 rounded-xl md:rounded-2xl outline-none focus:ring-4 focus:ring-[var(--eva-purple)]/10 resize-none font-medium flex-grow shadow-inner" autoFocus />
             <div className="flex gap-2 justify-end pb-1 md:pb-2">

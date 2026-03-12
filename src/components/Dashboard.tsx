@@ -267,7 +267,9 @@ const MemoRow = React.memo(function MemoRow({ memo, onToggle, onDelete, onRefres
   const [isEditing, setIsEditing] = useState(false);
   const [editContent, setEditContent] = useState(memo.content);
   const [editCategory, setEditCategory] = useState<string>(memo.category);
+  const [editDate, setEditDate] = useState<string>(memo.targetDate);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const dateInputRef = useRef<HTMLInputElement>(null);
   const isClass = memo.tags.includes('수업');
 
   useEffect(() => {
@@ -280,12 +282,17 @@ const MemoRow = React.memo(function MemoRow({ memo, onToggle, onDelete, onRefres
   const handleEditStart = () => {
     setEditContent(memo.content);
     setEditCategory(memo.category);
+    setEditDate(memo.targetDate);
     setIsEditing(true);
   };
 
   const handleUpdate = async () => {
     if (!editContent.trim()) return;
-    await updateMemo(memo.id, { content: editContent.trim(), category: editCategory as Category }, userId);
+    await updateMemo(memo.id, { 
+      content: editContent.trim(), 
+      category: editCategory as Category,
+      targetDate: editDate
+    }, userId);
     setIsEditing(false);
     onRefresh();
   };
@@ -323,7 +330,7 @@ const MemoRow = React.memo(function MemoRow({ memo, onToggle, onDelete, onRefres
         <button onClick={() => onToggle(memo.id)} className={`flex-shrink-0 w-4.5 h-4.5 md:w-5 md:h-5 rounded border-2 flex items-center justify-center transition-all ${memo.completed ? 'bg-[var(--eva-purple)] border-[var(--eva-purple)] text-white shadow-[0_0_8px_var(--eva-purple)]' : isClass ? 'border-amber-500 bg-[var(--bg-main)] shadow-[0_0_8px_rgba(245,158,11,0.2)]' : 'border-[var(--eva-purple)]/30 bg-[var(--bg-main)]'}`}>{memo.completed && <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" className="text-[var(--eva-green)]"><path d="M20 6 9 17l-5-5"/></svg>}</button>
         <div className="flex-grow min-w-0">{isEditing ? (
           <div className="w-full space-y-2 py-1 animate-in fade-in slide-in-from-top-1 duration-200">
-            <div className="flex items-center gap-2 mb-1">
+            <div className="flex flex-wrap items-center gap-2 mb-1">
               <select 
                 value={editCategory} 
                 onChange={(e) => setEditCategory(e.target.value)}
@@ -331,6 +338,26 @@ const MemoRow = React.memo(function MemoRow({ memo, onToggle, onDelete, onRefres
               >
                 {categories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
               </select>
+              
+              {editCategory === 'TODO' && (
+                <div className="relative">
+                  <input 
+                    type="date" 
+                    ref={dateInputRef} 
+                    value={editDate} 
+                    onChange={(e) => setEditDate(e.target.value)} 
+                    className="absolute inset-0 w-0 h-0 opacity-0 overflow-hidden" 
+                  />
+                  <button 
+                    onClick={() => dateInputRef.current?.showPicker()} 
+                    className="text-[8px] md:text-[9px] font-black text-[var(--eva-purple)] bg-[var(--eva-purple)]/5 px-2 py-1 rounded-lg flex items-center gap-1 border border-[var(--eva-purple)]/10 hover:bg-[var(--eva-purple)]/10 transition-all uppercase tracking-widest"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="18" x="3" y="4" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                    {editDate}
+                  </button>
+                </div>
+              )}
+              
               <div className="h-[1px] flex-grow bg-[var(--eva-purple)]/10" />
             </div>
             <textarea ref={textareaRef} value={editContent} onChange={(e) => setEditContent(e.target.value)} className="w-full p-2.5 md:p-3 text-xs md:text-sm bg-[var(--bg-input)] text-[var(--text-primary)] border border-[var(--eva-purple)]/20 rounded-xl outline-none focus:ring-2 focus:ring-[var(--eva-purple)]/50 resize-none font-medium" autoFocus />
