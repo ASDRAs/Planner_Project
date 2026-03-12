@@ -170,10 +170,11 @@ export default function MemoList({ memos, onDelete, onRefresh, userId }: MemoLis
           </SortableContext>
         </div>
         <DragOverlay dropAnimation={{ sideEffects: defaultDropAnimationSideEffects({ styles: { active: { opacity: '0.5' } } }) }}>
-          {activeMemo ? (
-            <div className="w-[300px] pointer-events-none select-none" style={{ willChange: 'transform' }}>
+          {activeMemo && mounted ? createPortal(
+            <div className="w-[300px] pointer-events-none select-none" style={{ opacity: 0.9 }}>
               <KnowledgeCard memo={activeMemo} isSelected={selectedIds.includes(activeMemo.id)} isEditing={false} onSelect={() => {}} onEdit={() => {}} onCancelEdit={() => {}} onDelete={() => {}} onRefresh={() => {}} onExpand={() => {}} isOverlay />
-            </div>
+            </div>,
+            document.body
           ) : null}
         </DragOverlay>
       </DndContext>

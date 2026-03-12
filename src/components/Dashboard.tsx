@@ -136,10 +136,11 @@ export default function Dashboard({ memos, onToggle, onDelete, onRefresh, userId
           ))}
         </div>
         <DragOverlay dropAnimation={{ sideEffects: defaultDropAnimationSideEffects({ styles: { active: { opacity: '0.5' } } }) }}>
-          {activeMemo ? (
-            <div className="w-[320px] md:w-[400px] pointer-events-none select-none" style={{ willChange: 'transform' }}>
+          {activeMemo && mounted ? createPortal(
+            <div className="w-[320px] md:w-[400px] pointer-events-none select-none" style={{ opacity: 0.9 }}>
               <MemoRow memo={activeMemo} onToggle={() => {}} onDelete={() => {}} onRefresh={() => {}} isOverlay />
-            </div>
+            </div>,
+            document.body
           ) : null}
         </DragOverlay>
       </DndContext>
