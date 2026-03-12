@@ -129,6 +129,8 @@ export default function MemoInput({ onSave, user }: MemoInputProps) {
     dateInputRefs.current[index]?.showPicker();
   };
 
+  const categories: Category[] = ['STUDY', 'GAME_DESIGN', 'VAULT', 'THOUGHT', 'TODO'];
+
   return (
     <div className="w-full space-y-4 font-sans text-[var(--text-primary)]">
       <div className="relative">
