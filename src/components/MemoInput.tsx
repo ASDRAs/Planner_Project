@@ -2,10 +2,11 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { classifyMemo, ClassificationResult, Category } from '@/lib/classifier';
-import { saveMemo } from '@/lib/storage';
+import { getLocalMemos, saveMemo } from '@/lib/storage';
 import { saveTrainingLog } from '@/lib/memo/trainingLog';
 import { User } from '@supabase/supabase-js';
 import { getLocalDateString } from '@/lib/dateUtils';
+import { CATEGORY_VALUES } from '@/lib/constants';
 
 interface MemoInputProps {
   onSave: () => void;
@@ -25,24 +26,21 @@ export default function MemoInput({ onSave, user }: MemoInputProps) {
   const isSpecialUser = user?.email === 'asdra030522@gmail.com';
 
   const getExistingFoldersMap = useCallback(() => {
-    const memos = JSON.parse(localStorage.getItem('daily-planner-memos') || '[]');
+    const memos = getLocalMemos();
     const folderMap: Record<string, Category> = {};
-    
-    // Process in two passes to ensure STUDY priority
-    // Pass 1: Gather everything else
-    memos.forEach((m: any) => {
-      if (m.folder && m.category) {
-        folderMap[m.folder] = m.category;
+
+    for (const memo of memos) {
+      if (memo.folder) {
+        folderMap[memo.folder] = memo.category;
       }
-    });
-    
-    // Pass 2: Overwrite with STUDY if it exists anywhere as STUDY
-    memos.forEach((m: any) => {
-      if (m.folder && m.category === 'STUDY') {
-        folderMap[m.folder] = 'STUDY';
+    }
+
+    for (const memo of memos) {
+      if (memo.folder && memo.category === 'STUDY') {
+        folderMap[memo.folder] = 'STUDY';
       }
-    });
-    
+    }
+
     return folderMap;
   }, []);
 
@@ -129,7 +127,7 @@ export default function MemoInput({ onSave, user }: MemoInputProps) {
     dateInputRefs.current[index]?.showPicker();
   };
 
-  const categories: Category[] = ['STUDY', 'GAME_DESIGN', 'VAULT', 'THOUGHT', 'TODO'];
+  const categories = CATEGORY_VALUES;
 
   return (
     <div className="w-full space-y-4 font-sans text-[var(--text-primary)]">

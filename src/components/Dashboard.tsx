@@ -4,6 +4,7 @@ import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { createPortal } from 'react-dom';
 import { Memo, updateMemo } from '@/lib/storage';
 import { Category } from '@/lib/classifier';
+import { CATEGORY_VALUES_TODO_FIRST } from '@/lib/constants';
 import { getLocalDateString, getRelativeDateString, parseLocalDate } from '@/lib/dateUtils';
 import {
   DndContext,
@@ -297,7 +298,7 @@ const MemoRow = React.memo(function MemoRow({ memo, onToggle, onDelete, onRefres
     onRefresh();
   };
 
-  const categories = ['TODO', 'STUDY', 'GAME_DESIGN', 'VAULT', 'THOUGHT'];
+  const categories = CATEGORY_VALUES_TODO_FIRST;
 
   return (
     <div className={`group flex flex-col gap-2 px-3 md:px-4 py-2.5 md:py-3 rounded-xl md:rounded-2xl transition-all border relative overflow-hidden ${

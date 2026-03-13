@@ -1,6 +1,10 @@
 import { Category, Priority } from './classifier';
 import { supabase } from './supabase';
 import { getLocalDateString } from './dateUtils';
+import {
+  LOCAL_DELETED_MEMO_STORAGE_KEY,
+  LOCAL_MEMO_STORAGE_KEY,
+} from './constants';
 
 export interface Memo {
   id: string;
@@ -16,91 +20,122 @@ export interface Memo {
   order?: number;
 }
 
-const STORAGE_KEY = 'daily-planner-memos';
-const DELETED_KEY = 'daily-planner-deleted-ids';
+const DEFAULT_TIMEOUT_MS = 8000;
+const FAST_FETCH_TIMEOUT_MS = 3000;
 
-/**
- * 서버 통신 타임아웃 헬퍼
- */
-async function withTimeout<T>(promise: Promise<T> | PromiseLike<T>, ms: number = 8000): Promise<T> {
+function parseJson<T>(raw: string | null, fallback: T): T {
+  if (!raw) return fallback;
+
+  try {
+    return JSON.parse(raw) as T;
+  } catch {
+    return fallback;
+  }
+}
+
+function sortByOrder(memos: Memo[]): Memo[] {
+  return [...memos].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+}
+
+function filterDeletedMemos(memos: Memo[], deletedIds: string[]): Memo[] {
+  if (deletedIds.length === 0) return memos;
+  const deletedSet = new Set(deletedIds);
+  return memos.filter((memo) => !deletedSet.has(memo.id));
+}
+
+function readStoredMemos(): Memo[] {
+  if (typeof window === 'undefined') return [];
+  const parsed = parseJson<unknown>(localStorage.getItem(LOCAL_MEMO_STORAGE_KEY), []);
+  return Array.isArray(parsed) ? (parsed as Memo[]) : [];
+}
+
+function writeStoredMemos(memos: Memo[]): void {
+  if (typeof window === 'undefined') return;
+  localStorage.setItem(LOCAL_MEMO_STORAGE_KEY, JSON.stringify(memos));
+}
+
+async function withTimeout<T>(promise: Promise<T> | PromiseLike<T>, ms = DEFAULT_TIMEOUT_MS): Promise<T> {
   let timeoutId: NodeJS.Timeout | undefined;
+
   const timeout = new Promise<never>((_, reject) => {
     timeoutId = setTimeout(() => reject(new Error('Server Connection Timeout')), ms);
   });
+
   const result = await Promise.race([promise, timeout]);
   if (timeoutId) clearTimeout(timeoutId);
   return result;
 }
 
+async function fetchRemoteMemos(userId: string, timeoutMs = DEFAULT_TIMEOUT_MS): Promise<Memo[]> {
+  const { data, error } = await withTimeout(
+    supabase.from('memos').select('*').eq('userId', userId).order('order', { ascending: true }),
+    timeoutMs
+  );
+
+  if (error) throw error;
+  return (data as Memo[]) ?? [];
+}
+
+function saveRemoteSnapshotToLocal(remoteMemos: Memo[]): Memo[] {
+  const filtered = filterDeletedMemos(remoteMemos, getDeletedIds());
+  saveLocalMemos(filtered);
+  return sortByOrder(filtered);
+}
+
 export function getDeletedIds(): string[] {
   if (typeof window === 'undefined') return [];
-  const stored = localStorage.getItem(DELETED_KEY);
-  return stored ? JSON.parse(stored) : [];
+
+  const parsed = parseJson<unknown>(localStorage.getItem(LOCAL_DELETED_MEMO_STORAGE_KEY), []);
+  if (!Array.isArray(parsed)) return [];
+  return parsed.filter((id): id is string => typeof id === 'string');
 }
 
-function saveDeletedIds(ids: string[]) {
+function saveDeletedIds(ids: string[]): void {
   if (typeof window === 'undefined') return;
-  localStorage.setItem(DELETED_KEY, JSON.stringify(ids));
+  const uniqueIds = Array.from(new Set(ids));
+  localStorage.setItem(LOCAL_DELETED_MEMO_STORAGE_KEY, JSON.stringify(uniqueIds));
 }
 
-function addDeletedId(id: string) {
+function addDeletedId(id: string): void {
   const ids = getDeletedIds();
   if (!ids.includes(id)) {
     saveDeletedIds([...ids, id]);
   }
 }
 
-function removeDeletedId(id: string) {
+function removeDeletedId(id: string): void {
   const ids = getDeletedIds();
-  saveDeletedIds(ids.filter(i => i !== id));
+  saveDeletedIds(ids.filter((existingId) => existingId !== id));
 }
 
 export function getLocalMemos(): Memo[] {
-  if (typeof window === 'undefined') return [];
-  const stored = localStorage.getItem(STORAGE_KEY);
-  const memos: Memo[] = stored ? JSON.parse(stored) : [];
-  const deletedIds = getDeletedIds();
-  return memos.filter(m => !deletedIds.includes(m.id));
+  return filterDeletedMemos(readStoredMemos(), getDeletedIds());
 }
 
-export function saveLocalMemos(memos: Memo[]) {
-  if (typeof window === 'undefined') return;
-  const deletedIds = getDeletedIds();
-  const filtered = memos.filter(m => !deletedIds.includes(m.id));
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(filtered));
+export function saveLocalMemos(memos: Memo[]): void {
+  const filtered = filterDeletedMemos(memos, getDeletedIds());
+  writeStoredMemos(filtered);
 }
 
 export async function fetchMemos(userId?: string): Promise<Memo[]> {
-  const local = getLocalMemos();
-  
-  // 게스트 모드이거나 오프라인일 때 즉시 로컬 반환
-  if (!userId) return local.sort((a, b) => (a.order || 0) - (b.order || 0));
+  const localMemos = sortByOrder(getLocalMemos());
+  if (!userId) return localMemos;
 
   try {
-    const { data, error } = await withTimeout(
-      supabase.from('memos').select('*').eq('userId', userId).order('order', { ascending: true }),
-      3000 // 타임아웃을 3초로 단축하여 체감 속도 향상
-    );
-    
-    if (error) throw error;
-    if (data) {
-      const deletedIds = getDeletedIds();
-      const filteredData = (data as Memo[]).filter(m => !deletedIds.includes(m.id));
-      saveLocalMemos(filteredData);
-      return filteredData.sort((a, b) => (a.order || 0) - (b.order || 0));
+    const remoteMemos = await fetchRemoteMemos(userId, FAST_FETCH_TIMEOUT_MS);
+    return saveRemoteSnapshotToLocal(remoteMemos);
+  } catch (error: unknown) {
+    if (error instanceof Error) {
+      console.warn('[Storage] Server sync failed, using local cache:', error.message);
     }
-  } catch (e: unknown) {
-    if (e instanceof Error) {
-      console.warn("[Storage] Server sync failed, using local cache:", e.message);
-    }
+    return localMemos;
   }
-  return local.sort((a, b) => (a.order || 0) - (b.order || 0));
 }
 
 export async function saveMemo(memoData: Partial<Memo>, userId?: string): Promise<Memo> {
   const localMemos = getLocalMemos();
-  const maxOrder = localMemos.reduce((max, m) => Math.max(max, m.order || 0), 0);
-  
+  const maxOrder = localMemos.reduce((max, memo) => Math.max(max, memo.order ?? 0), 0);
+
   const newMemo: Memo = {
     ...memoData,
     id: crypto.randomUUID(),
@@ -112,15 +147,17 @@ export async function saveMemo(memoData: Partial<Memo>, userId?: string): Promis
     targetDate: memoData.targetDate || getLocalDateString(),
     completed: false,
     order: maxOrder + 1,
-    userId: userId || undefined
+    userId: userId || undefined,
   };
 
   if (userId) {
     try {
       const { error } = await withTimeout(supabase.from('memos').insert([newMemo]));
       if (error) throw error;
-    } catch (e: unknown) {
-      if (e instanceof Error) console.error(`저장 실패 (서버): ${e.message}`);
+    } catch (error: unknown) {
+      if (error instanceof Error) {
+        console.error(`Save failed on server: ${error.message}`);
+      }
     }
   }
 
@@ -131,86 +168,94 @@ export async function saveMemo(memoData: Partial<Memo>, userId?: string): Promis
 export async function updateMemo(id: string, updates: Partial<Memo>, userId?: string): Promise<void> {
   if (userId) {
     try {
-      const { error } = await withTimeout(supabase.from('memos').update(updates).eq('id', id).eq('userId', userId));
+      const { error } = await withTimeout(
+        supabase.from('memos').update(updates).eq('id', id).eq('userId', userId)
+      );
       if (error) throw error;
     } catch {
-      console.warn("Update failed on server.");
+      console.warn('Update failed on server.');
     }
   }
+
   const memos = getLocalMemos();
-  const idx = memos.findIndex(m => m.id === id);
-  if (idx !== -1) {
-    memos[idx] = { ...memos[idx], ...updates };
+  const index = memos.findIndex((memo) => memo.id === id);
+  if (index !== -1) {
+    memos[index] = { ...memos[index], ...updates };
     saveLocalMemos(memos);
   }
 }
 
 export async function deleteMemo(id: string, userId?: string): Promise<void> {
-  // 1. 즉시 로컬에서 제거 (Optimistic UI)
   const memos = getLocalMemos();
-  saveLocalMemos(memos.filter(m => m.id !== id));
+  saveLocalMemos(memos.filter((memo) => memo.id !== id));
 
-  if (userId) {
-    // 2. 삭제 추적 시작
-    addDeletedId(id);
+  if (!userId) return;
 
-    try {
-      // 3. 서버 삭제 시도
-      const { error } = await withTimeout(supabase.from('memos').delete().eq('id', id).eq('userId', userId));
-      if (error) throw error;
-      
-      // 4. 성공 시 추적 제거
-      removeDeletedId(id);
-    } catch (e: unknown) {
-      console.warn("[Storage] Server delete failed, will retry on sync:", e);
-      // 알림은 띄우지 않음 (백그라운드에서 재시도될 것이므로)
-    }
+  addDeletedId(id);
+
+  try {
+    const { error } = await withTimeout(
+      supabase.from('memos').delete().eq('id', id).eq('userId', userId)
+    );
+    if (error) throw error;
+    removeDeletedId(id);
+  } catch (error: unknown) {
+    console.warn('[Storage] Server delete failed, will retry on sync:', error);
   }
 }
 
 export async function syncToCloud(userId: string): Promise<void> {
-  const local = getLocalMemos();
-  if (local.length === 0) return;
+  const localMemos = getLocalMemos();
+  if (localMemos.length === 0) return;
+
   try {
-    const { error } = await withTimeout(supabase.from('memos').upsert(local.map(m => ({ ...m, userId }))));
+    const { error } = await withTimeout(
+      supabase.from('memos').upsert(localMemos.map((memo) => ({ ...memo, userId })))
+    );
     if (error) throw error;
   } catch {
-    console.error("Cloud backup failed.");
+    console.error('Cloud backup failed.');
   }
 }
 
 export async function importMemosFromJson(json: string, userId?: string): Promise<boolean> {
   try {
-    const memos = JSON.parse(json);
-    const processed: Memo[] = memos.map((m: Partial<Memo> & { subject?: string }) => ({
-      id: m.id || crypto.randomUUID(),
-      content: m.content || m.subject || "",
-      category: m.category || "THOUGHT",
-      priority: m.priority || "Medium",
-      tags: Array.isArray(m.tags) ? m.tags : [],
-      createdAt: m.createdAt || Date.now(),
-      targetDate: m.targetDate || getLocalDateString(),
-      completed: !!m.completed,
-      folder: m.folder || undefined,
-      order: m.order || 0,
-      userId: userId || undefined
+    const parsed = JSON.parse(json) as unknown;
+    if (!Array.isArray(parsed)) {
+      throw new Error('Backup file format is invalid.');
+    }
+
+    const processed: Memo[] = parsed.map((memo: Partial<Memo> & { subject?: string }) => ({
+      id: memo.id || crypto.randomUUID(),
+      content: memo.content || memo.subject || '',
+      category: memo.category || 'THOUGHT',
+      priority: memo.priority || 'Medium',
+      tags: Array.isArray(memo.tags) ? memo.tags : [],
+      createdAt: memo.createdAt || Date.now(),
+      targetDate: memo.targetDate || getLocalDateString(),
+      completed: !!memo.completed,
+      folder: memo.folder || undefined,
+      order: memo.order || 0,
+      userId: userId || undefined,
     }));
 
     if (userId) {
       const { error } = await withTimeout(supabase.from('memos').upsert(processed));
       if (error) throw error;
     }
-    
+
     saveLocalMemos(processed);
     return true;
-  } catch (e: unknown) {
-    if (e instanceof Error) alert(`Import failed: ${e.message}`);
+  } catch (error: unknown) {
+    if (error instanceof Error) {
+      alert(`Import failed: ${error.message}`);
+    }
     return false;
   }
 }
 
-export function exportMemosToJson(): string { 
-  return JSON.stringify(getLocalMemos(), null, 2); 
+export function exportMemosToJson(): string {
+  return JSON.stringify(getLocalMemos(), null, 2);
 }
 
 export interface SyncResult {
@@ -220,99 +265,100 @@ export interface SyncResult {
   conflicts?: number;
 }
 
-/**
- * Orchestrate synchronization with remote Supabase
- * Network Priority Strategy:
- * 1. Process pending deletions.
- * 2. Fetch remote data.
- * 3. Identify local items that are NOT on the server (new items) and push them.
- * 4. Refresh local data with remote data (remote wins on existing IDs).
- */
 export async function syncMemos(userId: string): Promise<SyncResult> {
   try {
-    // 1. 보류된 삭제 요청 처리
-    const deletedIds = getDeletedIds();
-    if (deletedIds.length > 0) {
-      const { error: delError } = await supabase.from('memos').delete().in('id', deletedIds).eq('userId', userId);
-      if (!delError) {
-        saveDeletedIds([]); // 성공 시 추적 목록 초기화
+    const pendingDeletedIds = getDeletedIds();
+    if (pendingDeletedIds.length > 0) {
+      const { error: deleteError } = await supabase
+        .from('memos')
+        .delete()
+        .in('id', pendingDeletedIds)
+        .eq('userId', userId);
+
+      if (!deleteError) {
+        saveDeletedIds([]);
       }
     }
 
-    // 2. 원격 데이터 먼저 가져오기 (네트워크 우선 원칙)
-    const { data: remoteData, error: pullError } = await withTimeout(
-      supabase.from('memos').select('*').eq('userId', userId).order('order', { ascending: true })
-    );
-    if (pullError) throw pullError;
+    const remoteMemos = await fetchRemoteMemos(userId);
+    const localMemos = getLocalMemos();
+    const remoteIdSet = new Set(remoteMemos.map((memo) => memo.id));
+    const newLocalMemos = localMemos.filter((memo) => !remoteIdSet.has(memo.id));
 
-    const local = getLocalMemos();
-    const remoteMemos = (remoteData as Memo[]) || [];
-    const remoteIds = new Set(remoteMemos.map(m => m.id));
-    
-    // 3. 서버에 없는 새로운 로컬 데이터만 식별하여 푸시
-    const newLocalMemos = local.filter(m => !remoteIds.has(m.id));
-    
     if (newLocalMemos.length > 0) {
       const { error: pushError } = await withTimeout(
-        supabase.from('memos').upsert(newLocalMemos.map(m => ({ ...m, userId })))
+        supabase.from('memos').upsert(newLocalMemos.map((memo) => ({ ...memo, userId })))
       );
       if (pushError) throw pushError;
-      
-      // 푸시 후 최신 상태를 다시 가져옴 (방금 추가된 것 포함)
-      const { data: updatedRemoteData, error: finalPullError } = await withTimeout(
-        supabase.from('memos').select('*').eq('userId', userId).order('order', { ascending: true })
-      );
-      if (!finalPullError && updatedRemoteData) {
-        const currentDeletedIds = getDeletedIds();
-        const filteredData = (updatedRemoteData as Memo[]).filter(m => !currentDeletedIds.includes(m.id));
-        saveLocalMemos(filteredData);
-        return { ok: true, pulled: filteredData.length, pushed: newLocalMemos.length };
-      }
+
+      const refreshedRemoteMemos = await fetchRemoteMemos(userId);
+      const merged = saveRemoteSnapshotToLocal(refreshedRemoteMemos);
+      return { ok: true, pulled: merged.length, pushed: newLocalMemos.length };
     }
 
-    // 4. 로컬 저장소를 서버 데이터로 동기화 (충돌 시 서버 데이터가 덮어씀)
-    const currentDeletedIds = getDeletedIds();
-    const finalFilteredData = remoteMemos.filter(m => !currentDeletedIds.includes(m.id));
-    saveLocalMemos(finalFilteredData);
-    
-    return { ok: true, pulled: finalFilteredData.length, pushed: newLocalMemos.length };
-  } catch (e: unknown) {
-    console.error("[Storage] Sync failed:", e);
+    const merged = saveRemoteSnapshotToLocal(remoteMemos);
+    return { ok: true, pulled: merged.length, pushed: 0 };
+  } catch (error: unknown) {
+    console.error('[Storage] Sync failed:', error);
     return { ok: false };
   }
 }
 
 export async function updateMemosOrder(orderedMemos: Memo[], userId?: string): Promise<void> {
   saveLocalMemos(orderedMemos);
-  if (userId) {
-    try {
-      await withTimeout(Promise.all(orderedMemos.map(m => 
-        supabase.from('memos').update({ order: m.order, folder: m.folder }).eq('id', m.id).eq('userId', userId)
-      )));
-    } catch {
-      // ignore
-    }
+
+  if (!userId) return;
+
+  try {
+    await withTimeout(
+      Promise.all(
+        orderedMemos.map((memo) =>
+          supabase
+            .from('memos')
+            .update({ order: memo.order, folder: memo.folder })
+            .eq('id', memo.id)
+            .eq('userId', userId)
+        )
+      )
+    );
+  } catch {
+    // intentionally ignored; local state already updated
   }
 }
 
 export async function mergeMemos(ids: string[], userId?: string): Promise<void> {
   const localMemos = getLocalMemos();
-  const selected = localMemos.filter(m => ids.includes(m.id)).sort((a, b) => a.createdAt - b.createdAt);
-  if (selected.length < 2) return;
-  const mergedContent = selected.map(m => m.content).join('\n---\n');
-  const base = selected[0];
-  const newMemo = await saveMemo({
-    content: mergedContent, category: base.category, priority: base.priority,
-    tags: Array.from(new Set(selected.flatMap(m => m.tags))),
-    folder: base.folder, targetDate: base.targetDate
-  }, userId);
+  const selectedMemos = localMemos
+    .filter((memo) => ids.includes(memo.id))
+    .sort((a, b) => a.createdAt - b.createdAt);
+
+  if (selectedMemos.length < 2) return;
+
+  const mergedContent = selectedMemos.map((memo) => memo.content).join('\n---\n');
+  const baseMemo = selectedMemos[0];
+
+  const newMemo = await saveMemo(
+    {
+      content: mergedContent,
+      category: baseMemo.category,
+      priority: baseMemo.priority,
+      tags: Array.from(new Set(selectedMemos.flatMap((memo) => memo.tags))),
+      folder: baseMemo.folder,
+      targetDate: baseMemo.targetDate,
+    },
+    userId
+  );
+
   for (const id of ids) {
-    if (id !== newMemo.id) await deleteMemo(id, userId);
+    if (id !== newMemo.id) {
+      await deleteMemo(id, userId);
+    }
   }
 }
 
 export async function toggleMemoCompletion(id: string, userId?: string): Promise<void> {
-  const memos = getLocalMemos();
-  const memo = memos.find(m => m.id === id);
-  if (memo) await updateMemo(id, { completed: !memo.completed }, userId);
+  const memo = getLocalMemos().find((localMemo) => localMemo.id === id);
+  if (memo) {
+    await updateMemo(id, { completed: !memo.completed }, userId);
+  }
 }

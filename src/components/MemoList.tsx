@@ -4,6 +4,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { Memo, updateMemo, mergeMemos, updateMemosOrder } from '@/lib/storage';
 import { Category } from '@/lib/classifier';
+import { CATEGORY_FILTER_VALUES, CATEGORY_VALUES } from '@/lib/constants';
 import ConfirmModal from './ConfirmModal';
 import {
   DndContext,
@@ -129,7 +130,7 @@ export default function MemoList({ memos, onDelete, onRefresh, userId }: MemoLis
     }
   }, [memos, userId, onRefresh]);
 
-  const categories: (Category | 'All')[] = ['STUDY', 'GAME_DESIGN', 'VAULT', 'THOUGHT', 'All'];
+  const categories: (Category | 'All')[] = CATEGORY_FILTER_VALUES;
 
   return (
     <div className="w-full max-w-5xl mx-auto space-y-6 md:space-y-8">
@@ -326,7 +327,7 @@ function KnowledgeCard({ memo, isSelected, isEditing, onSelect, onEdit, onCancel
     onRefresh();
   };
 
-  const categories: Category[] = ['STUDY', 'GAME_DESIGN', 'VAULT', 'THOUGHT', 'TODO'];
+  const categories: Category[] = CATEGORY_VALUES;
 
   const getCategoryColor = (cat: string) => {
     switch (cat) {
