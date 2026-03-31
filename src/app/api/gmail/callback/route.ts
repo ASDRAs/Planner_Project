@@ -1,0 +1,69 @@
+import { NextRequest, NextResponse } from 'next/server';
+import {
+  clearOAuthStateCookie,
+  exchangeAuthorizationCode,
+  fetchGmailProfile,
+  GMAIL_OAUTH_STATE_COOKIE,
+  getGmailConfig,
+  validateOAuthState,
+  writeGrantCookie,
+} from '@/lib/gmail/server';
+
+export const dynamic = 'force-dynamic';
+
+function redirectHome(request: NextRequest, status: string): NextResponse {
+  const url = new URL('/', request.url);
+  url.searchParams.set('gmail', status);
+  return NextResponse.redirect(url);
+}
+
+export async function GET(request: NextRequest) {
+  const config = getGmailConfig(request);
+  if (!config) {
+    return NextResponse.json(
+      { error: 'Gmail integration is not configured on the server.' },
+      { status: 500 }
+    );
+  }
+
+  const code = request.nextUrl.searchParams.get('code');
+  const state = request.nextUrl.searchParams.get('state') ?? undefined;
+  const error = request.nextUrl.searchParams.get('error');
+  const expectedState = request.cookies.get(GMAIL_OAUTH_STATE_COOKIE)?.value;
+
+  if (error) {
+    const response = redirectHome(request, 'denied');
+    clearOAuthStateCookie(response, request);
+    return response;
+  }
+
+  if (!validateOAuthState(expectedState, state) || !code) {
+    const response = redirectHome(request, 'invalid');
+    clearOAuthStateCookie(response, request);
+    return response;
+  }
+
+  try {
+    const tokens = await exchangeAuthorizationCode(config, code);
+    if (!tokens.refresh_token) {
+      throw new Error('Google did not return a refresh token');
+    }
+
+    const profile = await fetchGmailProfile(tokens.access_token);
+    if (!profile.emailAddress) {
+      throw new Error('Unable to resolve Gmail address');
+    }
+
+    const response = redirectHome(request, 'linked');
+    writeGrantCookie(response, request, config, {
+      emailAddress: profile.emailAddress,
+      refreshToken: tokens.refresh_token,
+    });
+    clearOAuthStateCookie(response, request);
+    return response;
+  } catch {
+    const response = redirectHome(request, 'error');
+    clearOAuthStateCookie(response, request);
+    return response;
+  }
+}

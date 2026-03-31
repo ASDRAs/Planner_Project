@@ -121,6 +121,17 @@ html, body {
   to { transform: translate(2%, 2%) scale(1.05); }
 }
 
+@keyframes eva-spin-counter {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(-360deg); }
+}
+
+.eva-spin-slow {
+  animation: eva-spin-counter 18s linear infinite;
+  transform-origin: center;
+  will-change: transform;
+}
+
 /* --- Components --- */
 .eva-glass {
   background: var(--bg-card) !important;

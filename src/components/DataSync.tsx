@@ -4,33 +4,51 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { exportMemosToJson, importMemosFromJson, syncMemos } from '@/lib/storage';
 import { getLocalDateString } from '@/lib/dateUtils';
+import { EMPTY_GMAIL_STATUS, type GmailStatus } from '@/lib/gmail/shared';
 
-export type SyncStatus = "idle" | "syncing" | "ready" | "error";
+export type SyncStatus = 'idle' | 'syncing' | 'ready' | 'error';
 
 interface DataSyncProps {
   onSyncComplete: () => void;
   userId?: string;
   isEnabled?: boolean;
-  onAuthFailure?: () => void;
   onSyncStateChange?: (isSyncing: boolean) => void;
 }
 
-export default function DataSync({ onSyncComplete, userId, isEnabled = true, onAuthFailure, onSyncStateChange }: DataSyncProps) {
+const POLLING_INTERVAL_MS = 60_000;
+const GMAIL_LONG_PRESS_MS = 700;
+
+function normalizeGmailStatus(status: Partial<GmailStatus>): GmailStatus {
+  return {
+    ...EMPTY_GMAIL_STATUS,
+    ...status,
+  };
+}
+
+export default function DataSync({
+  onSyncComplete,
+  userId,
+  isEnabled = true,
+  onSyncStateChange,
+}: DataSyncProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
-  const [syncStatus, setSyncStatus] = useState<SyncStatus>("idle");
+  const [syncStatus, setSyncStatus] = useState<SyncStatus>('idle');
+  const [gmailStatus, setGmailStatus] = useState<GmailStatus>(EMPTY_GMAIL_STATUS);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
-  
-  useEffect(() => {
-    if (onSyncStateChange) {
-      onSyncStateChange(syncStatus === "syncing");
-    }
-  }, [syncStatus, onSyncStateChange]);
-  
   const isSyncingRef = useRef(false);
   const pollingTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const gmailPollingTimerRef = useRef<NodeJS.Timeout | null>(null);
   const onSyncCompleteRef = useRef(onSyncComplete);
+  const gmailLongPressTimerRef = useRef<number | null>(null);
+  const gmailLongPressTriggeredRef = useRef(false);
+
+  useEffect(() => {
+    if (onSyncStateChange) {
+      onSyncStateChange(syncStatus === 'syncing');
+    }
+  }, [syncStatus, onSyncStateChange]);
 
   useEffect(() => {
     onSyncCompleteRef.current = onSyncComplete;
@@ -40,91 +58,177 @@ export default function DataSync({ onSyncComplete, userId, isEnabled = true, onA
     setMounted(true);
   }, []);
 
+  const refreshGmailStatus = useCallback(async () => {
+    try {
+      const response = await fetch('/api/gmail/status', {
+        method: 'GET',
+        cache: 'no-store',
+      });
+
+      if (!response.ok) {
+        throw new Error('Gmail status request failed');
+      }
+
+      const nextStatus = normalizeGmailStatus((await response.json()) as Partial<GmailStatus>);
+      setGmailStatus(nextStatus);
+    } catch (error) {
+      console.error('Gmail status refresh failed:', error);
+      setGmailStatus((current) => {
+        if (!current.configured) return current;
+        return {
+          ...current,
+          error: 'Gmail 상태를 새로고침하지 못했습니다.',
+        };
+      });
+    }
+  }, []);
+
+  const stopPolling = useCallback(() => {
+    if (pollingTimerRef.current) {
+      clearInterval(pollingTimerRef.current);
+      pollingTimerRef.current = null;
+    }
+  }, []);
+
   const performSync = useCallback(async () => {
     if (!userId || !isEnabled || isSyncingRef.current) return;
 
     isSyncingRef.current = true;
-    setSyncStatus("syncing");
+    setSyncStatus('syncing');
 
     try {
       const result = await syncMemos(userId);
       if (result.ok) {
-        setSyncStatus("ready");
+        setSyncStatus('ready');
         onSyncCompleteRef.current();
       } else {
-        setSyncStatus("error");
-        // Check if it's an auth failure (simplistic check for now)
-        // In a real app, we'd check the error code from Supabase
-        // If we get an error but we're supposed to be logged in, it might be auth
-        console.warn("Sync failed. If this persists, re-login may be required.");
+        setSyncStatus('error');
+        console.warn('Sync failed. If this persists, re-login may be required.');
       }
     } catch (err) {
-      console.error("Sync orchestration error:", err);
-      setSyncStatus("error");
+      console.error('Sync orchestration error:', err);
+      setSyncStatus('error');
     } finally {
       isSyncingRef.current = false;
     }
-  }, [userId, isEnabled, onSyncComplete]);
+  }, [userId, isEnabled]);
 
   const startPolling = useCallback(() => {
     stopPolling();
     if (userId && isEnabled) {
       pollingTimerRef.current = setInterval(() => {
-        performSync();
-      }, 60000); // 60 seconds
+        void performSync();
+      }, POLLING_INTERVAL_MS);
     }
-  }, [userId, isEnabled, performSync]);
+  }, [userId, isEnabled, performSync, stopPolling]);
 
-  const stopPolling = () => {
-    if (pollingTimerRef.current) {
-      clearInterval(pollingTimerRef.current);
-      pollingTimerRef.current = null;
+  const stopGmailPolling = useCallback(() => {
+    if (gmailPollingTimerRef.current) {
+      clearInterval(gmailPollingTimerRef.current);
+      gmailPollingTimerRef.current = null;
     }
-  };
+  }, []);
 
-  // Initial Sync and Polling Setup
+  const startGmailPolling = useCallback(() => {
+    stopGmailPolling();
+    gmailPollingTimerRef.current = setInterval(() => {
+      void refreshGmailStatus();
+    }, POLLING_INTERVAL_MS);
+  }, [refreshGmailStatus, stopGmailPolling]);
+
   useEffect(() => {
     if (isEnabled && userId) {
-      performSync();
+      void performSync();
       startPolling();
     } else {
       stopPolling();
     }
     return () => stopPolling();
-  }, [isEnabled, userId, performSync, startPolling]);
+  }, [isEnabled, userId, performSync, startPolling, stopPolling]);
 
-  // Visibility Handling
+  useEffect(() => {
+    if (!mounted) return;
+
+    void refreshGmailStatus();
+    startGmailPolling();
+
+    return () => stopGmailPolling();
+  }, [mounted, refreshGmailStatus, startGmailPolling, stopGmailPolling]);
+
   useEffect(() => {
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
         if (isEnabled && userId) {
-          performSync();
+          void performSync();
           startPolling();
         }
+        void refreshGmailStatus();
+        startGmailPolling();
       } else {
         stopPolling();
+        stopGmailPolling();
       }
     };
 
     document.addEventListener('visibilitychange', handleVisibilityChange);
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
-  }, [isEnabled, userId, performSync, startPolling]);
+  }, [
+    isEnabled,
+    userId,
+    performSync,
+    startPolling,
+    stopPolling,
+    refreshGmailStatus,
+    startGmailPolling,
+    stopGmailPolling,
+  ]);
 
   useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
+    const handleClickOutside = (event: PointerEvent) => {
       if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
         setIsOpen(false);
       }
     };
+
     if (isOpen) {
-      document.addEventListener('mousedown', handleClickOutside);
+      document.addEventListener('pointerdown', handleClickOutside);
     }
+
     return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('pointerdown', handleClickOutside);
     };
   }, [isOpen]);
 
-  if (!mounted) return null;
+  useEffect(() => {
+    if (!mounted) return;
+
+    const params = new URLSearchParams(window.location.search);
+    const gmailResult = params.get('gmail');
+    if (!gmailResult) return;
+
+    if (gmailResult === 'denied') {
+      alert('Gmail 연동이 취소되었습니다.');
+    } else if (gmailResult !== 'linked') {
+      alert('Gmail 연동 중 오류가 발생했습니다. 다시 시도해 주세요.');
+    }
+
+    void refreshGmailStatus();
+    params.delete('gmail');
+    const nextQuery = params.toString();
+    const nextUrl = `${window.location.pathname}${nextQuery ? `?${nextQuery}` : ''}${window.location.hash}`;
+    window.history.replaceState({}, '', nextUrl);
+  }, [mounted, refreshGmailStatus]);
+
+  const clearGmailLongPressTimer = useCallback(() => {
+    if (gmailLongPressTimerRef.current !== null) {
+      window.clearTimeout(gmailLongPressTimerRef.current);
+      gmailLongPressTimerRef.current = null;
+    }
+  }, []);
+
+  useEffect(() => {
+    return () => clearGmailLongPressTimer();
+  }, [clearGmailLongPressTimer]);
 
   const handleExport = () => {
     const json = exportMemosToJson();
@@ -145,12 +249,13 @@ export default function DataSync({ onSyncComplete, userId, isEnabled = true, onA
     if (!file) return;
 
     const reader = new FileReader();
-    reader.onload = async (e) => {
-      const content = e.target?.result as string;
+    reader.onload = async (loadEvent) => {
+      const content = loadEvent.target?.result as string;
+
       try {
         const success = await importMemosFromJson(content, userId);
         if (success) {
-          onSyncComplete();
+          onSyncCompleteRef.current();
         } else {
           alert('데이터 형식이 올바르지 않습니다.');
         }
@@ -160,73 +265,266 @@ export default function DataSync({ onSyncComplete, userId, isEnabled = true, onA
         }
       }
     };
+
     reader.readAsText(file);
     if (fileInputRef.current) fileInputRef.current.value = '';
     setIsOpen(false);
   };
 
+  const handleGmailConnect = useCallback(() => {
+    if (!gmailStatus.configured) {
+      alert(
+        'Gmail 연동이 아직 설정되지 않았습니다.\n' +
+          'GOOGLE_GMAIL_CLIENT_ID, GOOGLE_GMAIL_CLIENT_SECRET, GMAIL_COOKIE_SECRET 환경변수가 필요합니다.'
+      );
+      return;
+    }
+
+    window.location.assign('/api/gmail/connect');
+  }, [gmailStatus.configured]);
+
+  const handleGmailClick = useCallback(() => {
+    if (gmailLongPressTriggeredRef.current) {
+      gmailLongPressTriggeredRef.current = false;
+      return;
+    }
+
+    setIsOpen(false);
+
+    if (gmailStatus.linked && gmailStatus.redirectUrl) {
+      window.location.assign(gmailStatus.redirectUrl);
+      return;
+    }
+
+    handleGmailConnect();
+  }, [gmailStatus.linked, gmailStatus.redirectUrl, handleGmailConnect]);
+
+  const handleGmailPressStart = useCallback(() => {
+    gmailLongPressTriggeredRef.current = false;
+    clearGmailLongPressTimer();
+
+    gmailLongPressTimerRef.current = window.setTimeout(() => {
+      gmailLongPressTriggeredRef.current = true;
+      setIsOpen(false);
+      handleGmailConnect();
+    }, GMAIL_LONG_PRESS_MS);
+  }, [clearGmailLongPressTimer, handleGmailConnect]);
+
+  const handleGmailPressEnd = useCallback(() => {
+    clearGmailLongPressTimer();
+  }, [clearGmailLongPressTimer]);
+
+  if (!mounted) return null;
+
+  const floatingContainerStyle: React.CSSProperties = {
+    transform: 'translateZ(0)',
+    bottom: 'calc(env(safe-area-inset-bottom, 0px) + 1rem)',
+    right: 'calc(env(safe-area-inset-right, 0px) + 1rem)',
+  };
+
+  const floatingMenuStyle: React.CSSProperties = {
+    width: 'min(16rem, calc(100vw - 2rem))',
+    maxWidth: 'calc(100vw - 2rem)',
+    maxHeight: 'calc(100dvh - 7rem - env(safe-area-inset-bottom, 0px))',
+  };
+
+  const gmailPrimaryLabel = gmailStatus.linked ? 'Open Gmail' : 'Link Gmail';
+  const gmailSecondaryLabel = gmailStatus.linked
+    ? gmailStatus.emailAddress || '연동된 Gmail'
+    : gmailStatus.configured
+      ? '클릭: 연동, 길게 누르기: 계정 변경'
+      : '서버 설정이 필요합니다';
+
   return createPortal(
-    <div className="fixed bottom-6 right-6 z-[9999] font-sans pointer-events-auto" ref={menuRef} style={{ transform: 'translateZ(0)' }}>
-      {/* 팝업 메뉴 */}
+    <div
+      className="fixed z-[9999] font-sans pointer-events-auto"
+      ref={menuRef}
+      style={floatingContainerStyle}
+    >
       {isOpen && (
-        <div className="absolute bottom-16 right-0 mb-2 w-48 bg-white dark:bg-zinc-900 rounded-[24px] shadow-2xl border border-zinc-100 dark:border-zinc-800 p-2 animate-in fade-in zoom-in-95 duration-200">
+        <div
+          className="absolute bottom-16 right-0 mb-2 overflow-y-auto overscroll-contain rounded-[24px] border border-zinc-100 bg-white p-2 shadow-2xl animate-in fade-in zoom-in-95 duration-200 dark:border-zinc-800 dark:bg-zinc-900"
+          style={floatingMenuStyle}
+        >
           <button
             onClick={handleExport}
-            className="w-full flex items-center gap-3 px-4 py-3 text-[11px] font-black text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white hover:bg-zinc-50 dark:hover:bg-zinc-800 rounded-2xl transition-all uppercase tracking-widest"
+            className="flex w-full touch-manipulation select-none items-center gap-3 rounded-2xl px-4 py-3 text-[11px] font-black uppercase tracking-widest text-zinc-600 transition-all hover:bg-zinc-50 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-white"
           >
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="3"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+              <polyline points="7 10 12 15 17 10" />
+              <line x1="12" y1="15" x2="12" y2="3" />
+            </svg>
             Export Backup
           </button>
-          
+
           <button
             onClick={() => fileInputRef.current?.click()}
-            className="w-full flex items-center gap-3 px-4 py-3 text-[11px] font-black text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white hover:bg-zinc-50 dark:hover:bg-zinc-800 rounded-2xl transition-all uppercase tracking-widest"
+            className="flex w-full touch-manipulation select-none items-center gap-3 rounded-2xl px-4 py-3 text-[11px] font-black uppercase tracking-widest text-zinc-600 transition-all hover:bg-zinc-50 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-white"
           >
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="3"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+              <polyline points="17 8 12 3 7 8" />
+              <line x1="12" y1="3" x2="12" y2="15" />
+            </svg>
             Import Backup
+          </button>
+
+          <button
+            onClick={handleGmailClick}
+            onPointerDown={handleGmailPressStart}
+            onPointerUp={handleGmailPressEnd}
+            onPointerLeave={handleGmailPressEnd}
+            onPointerCancel={handleGmailPressEnd}
+            onContextMenu={(event) => event.preventDefault()}
+            className="flex w-full touch-manipulation select-none items-center gap-3 rounded-2xl px-4 py-3 text-left text-[11px] font-black text-zinc-600 transition-all hover:bg-zinc-50 hover:text-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800 dark:hover:text-white"
+            title={
+              gmailStatus.linked
+                ? '클릭하면 Gmail을 열고, 길게 누르면 연동 계정을 변경합니다.'
+                : '클릭하면 Gmail을 연동합니다.'
+            }
+          >
+            <div className="relative flex-shrink-0">
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <rect x="3" y="5" width="18" height="14" rx="2" />
+                <path d="m3 7 9 6 9-6" />
+              </svg>
+              {gmailStatus.hasUnread && (
+                <span className="absolute -top-1 -right-1 block w-2.5 h-2.5 rounded-full bg-rose-500 shadow-[0_0_10px_rgba(244,63,94,0.9)]" />
+              )}
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="uppercase tracking-widest">{gmailPrimaryLabel}</div>
+              <div className="mt-1 text-[9px] font-semibold normal-case tracking-normal text-zinc-400 dark:text-zinc-500 truncate">
+                {gmailSecondaryLabel}
+              </div>
+            </div>
           </button>
 
           {userId && (
             <button
-              onClick={() => performSync()}
-              disabled={syncStatus === "syncing"}
-              className="w-full flex items-center gap-3 px-4 py-3 text-[11px] font-black text-zinc-600 dark:text-zinc-400 hover:text-[var(--eva-purple)] dark:hover:text-white hover:bg-zinc-50 dark:hover:bg-zinc-800 rounded-2xl transition-all uppercase tracking-widest disabled:opacity-50"
+              onClick={() => void performSync()}
+              disabled={syncStatus === 'syncing'}
+              className="flex w-full touch-manipulation select-none items-center gap-3 rounded-2xl px-4 py-3 text-[11px] font-black uppercase tracking-widest text-zinc-600 transition-all hover:bg-zinc-50 hover:text-[var(--eva-purple)] disabled:opacity-50 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-white"
             >
-              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className={syncStatus === "syncing" ? "animate-spin" : ""}><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></svg>
-              {syncStatus === "syncing" ? "Syncing..." : "Sync Now"}
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="3"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                className={syncStatus === 'syncing' ? 'animate-spin' : ''}
+              >
+                <path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8" />
+                <path d="M21 3v5h-5" />
+              </svg>
+              {syncStatus === 'syncing' ? 'Syncing...' : 'Sync Now'}
             </button>
           )}
         </div>
       )}
 
-      {/* 메인 플로팅 버튼 */}
       <div className="relative group">
-        <div className={`absolute inset-[-10px] border-2 border-dashed border-[var(--eva-purple)]/40 rounded-full eva-spin-slow transition-opacity duration-500 ${isOpen || syncStatus === "syncing" ? 'opacity-0' : 'opacity-100'}`} />
-        
+        <div
+          className={`absolute inset-[-8px] rounded-full border-2 border-dashed border-[var(--eva-purple)]/40 eva-spin-slow transition-opacity duration-500 sm:inset-[-10px] ${
+            isOpen ? 'opacity-45' : 'opacity-80'
+          }`}
+        />
+
         <button
           onClick={() => setIsOpen(!isOpen)}
-          className={`w-16 h-16 flex items-center justify-center rounded-full shadow-2xl transition-all duration-500 active:scale-90 relative z-10 ${
-            isOpen 
-              ? 'bg-purple-600 text-white rotate-45 shadow-[0_0_35px_var(--eva-purple-glow)] border-2 border-purple-400' 
-              : syncStatus === "syncing"
+          className={`relative z-10 flex h-14 w-14 touch-manipulation items-center justify-center rounded-full shadow-2xl transition-all duration-500 active:scale-90 sm:h-16 sm:w-16 ${
+            isOpen
+              ? 'bg-purple-600 text-white rotate-45 shadow-[0_0_35px_var(--eva-purple-glow)] border-2 border-purple-400'
+              : syncStatus === 'syncing'
                 ? 'bg-[var(--eva-purple)] text-white shadow-[0_0_25px_var(--eva-purple-glow)] animate-pulse'
                 : 'eva-glass text-[var(--eva-purple)] border-2 border-[var(--eva-purple)]/60 hover:scale-110 shadow-[0_0_25px_var(--eva-purple-glow)]'
           }`}
         >
           <div className="absolute inset-0 rounded-full bg-gradient-to-br from-[var(--eva-purple)]/20 to-transparent opacity-50" />
-          
-          <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className={`relative z-20 ${syncStatus === "syncing" ? "animate-spin" : ""}`}>
-            {syncStatus === "syncing" ? (
-               <path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8" />
+
+          {gmailStatus.hasUnread && (
+            <span className="absolute top-1.5 right-1.5 z-30 block w-3 h-3 rounded-full bg-rose-500 border-2 border-[var(--bg-main)] shadow-[0_0_12px_rgba(244,63,94,0.9)]" />
+          )}
+
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="32"
+            height="32"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="3"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            className={`relative z-20 ${syncStatus === 'syncing' ? 'animate-spin' : ''}`}
+          >
+            {syncStatus === 'syncing' ? (
+              <path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8" />
             ) : (
               <>
-                <line x1="12" y1="5" x2="12" y2="19" className={`transition-all duration-500 ${isOpen ? 'text-white' : 'text-[var(--eva-purple)]'}`} />
-                <line x1="5" y1="12" x2="19" y2="12" className={`transition-all duration-500 ${isOpen ? 'text-white' : 'text-[var(--eva-purple)]'}`} />
+                <line
+                  x1="12"
+                  y1="5"
+                  x2="12"
+                  y2="19"
+                  className={`transition-all duration-500 ${isOpen ? 'text-white' : 'text-[var(--eva-purple)]'}`}
+                />
+                <line
+                  x1="5"
+                  y1="12"
+                  x2="19"
+                  y2="12"
+                  className={`transition-all duration-500 ${isOpen ? 'text-white' : 'text-[var(--eva-purple)]'}`}
+                />
               </>
             )}
-            
-            {!isOpen && syncStatus !== "syncing" && (
-              <circle cx="12" cy="12" r="3" className={`${syncStatus === "error" ? "fill-rose-500/30 stroke-rose-500" : "fill-[var(--eva-green)]/30 stroke-[var(--eva-green)]"} animate-pulse`} />
+
+            {!isOpen && syncStatus !== 'syncing' && (
+              <circle
+                cx="12"
+                cy="12"
+                r="3"
+                className={`${
+                  syncStatus === 'error'
+                    ? 'fill-rose-500/30 stroke-rose-500'
+                    : 'fill-[var(--eva-green)]/30 stroke-[var(--eva-green)]'
+                } animate-pulse`}
+              />
             )}
           </svg>
         </button>

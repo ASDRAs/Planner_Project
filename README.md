@@ -11,7 +11,7 @@ Web planner for managing daily memos, tasks, and archive notes with an LLM-assis
 - Manage memo ordering and grouping with drag-and-drop interactions.
 - Store data locally for fast, offline-first usage.
 - Sync planner data to Supabase when authenticated.
-- Run as a browser app and optionally through a lightweight Tauri shell.
+- Run as a browser app.
 
 ## System Overview
 
@@ -28,7 +28,6 @@ Web planner for managing daily memos, tasks, and archive notes with an LLM-assis
 - `Google Gemini API` for memo classification
 - `dnd-kit` for drag-and-drop interactions
 - `Vitest` + Testing Library for tests
-- `Tauri` (optional desktop wrapper)
 
 ## Quick Start
 
@@ -47,9 +46,15 @@ Create `.env.local`:
 NEXT_PUBLIC_GEMINI_API_KEY=your_gemini_api_key
 NEXT_PUBLIC_SUPABASE_URL=https://xxxx.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
+GOOGLE_GMAIL_CLIENT_ID=your_google_oauth_client_id
+GOOGLE_GMAIL_CLIENT_SECRET=your_google_oauth_client_secret
+GMAIL_COOKIE_SECRET=long_random_secret_for_cookie_encryption
+# optional: defaults to {app_origin}/api/gmail/callback
+GOOGLE_GMAIL_REDIRECT_URI=http://localhost:3000/api/gmail/callback
 ```
 
 Supabase can also be configured at runtime from the app UI.
+For Gmail integration, enable the Gmail API in Google Cloud and add the callback URL to your OAuth client's authorized redirect URIs.
 
 ## Scripts
 
@@ -59,8 +64,6 @@ npm run build    # production build
 npm run start    # production server
 npm run test     # run tests
 npm run lint     # run lint
-npm run tauri:dev   # run desktop shell in development
-npm run tauri:build # build desktop shell
 ```
 
 ## Development Note
