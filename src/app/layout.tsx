@@ -16,7 +16,12 @@ export const metadata: Metadata = {
   title: "NEON GENESIS ARCHIVE",
   description: "Advanced MAGI Protocol - Neural Interface Planner",
   icons: {
-    icon: "/icon.svg",
+    icon: [
+      { url: "/favicon.ico", sizes: "any" },
+      { url: "/icon-512.png", type: "image/png", sizes: "512x512" },
+    ],
+    shortcut: "/favicon.ico",
+    apple: "/apple-icon.png",
   },
 };
 
