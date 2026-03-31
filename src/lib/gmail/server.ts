@@ -10,6 +10,7 @@ import { buildGmailInboxUrl, EMPTY_GMAIL_STATUS, type GmailStatus } from './shar
 
 export const GMAIL_GRANT_COOKIE = 'planner-gmail-grant';
 export const GMAIL_OAUTH_STATE_COOKIE = 'planner-gmail-oauth-state';
+export const GMAIL_OAUTH_MODE_COOKIE = 'planner-gmail-oauth-mode';
 export const GMAIL_READONLY_SCOPE = 'https://www.googleapis.com/auth/gmail.readonly';
 
 const GOOGLE_AUTH_BASE_URL = 'https://accounts.google.com/o/oauth2/v2/auth';
@@ -260,6 +261,26 @@ export function setOAuthStateCookie(response: NextResponse, request: NextRequest
 
 export function clearOAuthStateCookie(response: NextResponse, request: NextRequest): void {
   response.cookies.set(GMAIL_OAUTH_STATE_COOKIE, '', getBaseCookieOptions(request, 0));
+}
+
+export function setOAuthModeCookie(
+  response: NextResponse,
+  request: NextRequest,
+  mode: 'popup' | 'redirect'
+): void {
+  response.cookies.set(
+    GMAIL_OAUTH_MODE_COOKIE,
+    mode,
+    getBaseCookieOptions(request, GMAIL_STATE_MAX_AGE_SECONDS)
+  );
+}
+
+export function readOAuthMode(request: NextRequest): 'popup' | 'redirect' {
+  return request.cookies.get(GMAIL_OAUTH_MODE_COOKIE)?.value === 'popup' ? 'popup' : 'redirect';
+}
+
+export function clearOAuthModeCookie(response: NextResponse, request: NextRequest): void {
+  response.cookies.set(GMAIL_OAUTH_MODE_COOKIE, '', getBaseCookieOptions(request, 0));
 }
 
 export function writeGrantCookie(

@@ -6,6 +6,12 @@ import { User } from '@supabase/supabase-js';
 import { fetchGmailStatus } from '@/lib/gmail/client';
 import { EMPTY_GMAIL_STATUS, type GmailStatus } from '@/lib/gmail/shared';
 
+const GMAIL_POPUP_NAME = 'planner-gmail-auth';
+const GMAIL_POPUP_WIDTH = 520;
+const GMAIL_POPUP_HEIGHT = 720;
+
+type GmailPopupStatus = 'linked' | 'denied' | 'invalid' | 'error';
+
 function GmailActionRow({
   gmailStatus,
   isLoading,
@@ -138,7 +144,7 @@ export default function Auth() {
         if (!current.configured) return current;
         return {
           ...current,
-          error: 'Gmail 상태를 확인하지 못했습니다.',
+          error: 'Unable to refresh Gmail status.',
         };
       });
       return null;
@@ -152,6 +158,54 @@ export default function Auth() {
       void loadGmailStatus();
     }
   }, [isOpen, loadGmailStatus]);
+
+  useEffect(() => {
+    const handleGmailOAuthMessage = (event: MessageEvent) => {
+      if (event.origin !== window.location.origin) return;
+      if (typeof event.data !== 'object' || event.data === null) return;
+      if (!('type' in event.data) || event.data.type !== 'planner-gmail-oauth-result') return;
+
+      const status = event.data.status as GmailPopupStatus | undefined;
+      if (!status) return;
+
+      if (status === 'linked') {
+        void loadGmailStatus();
+        return;
+      }
+
+      if (status === 'denied') {
+        alert('Gmail linking was canceled.');
+        return;
+      }
+
+      alert('A Gmail linking error occurred. Please try again.');
+    };
+
+    window.addEventListener('message', handleGmailOAuthMessage);
+    return () => window.removeEventListener('message', handleGmailOAuthMessage);
+  }, [loadGmailStatus]);
+
+  const openGmailPopup = useCallback(() => {
+    const left = window.screenX + Math.max(0, (window.outerWidth - GMAIL_POPUP_WIDTH) / 2);
+    const top = window.screenY + Math.max(0, (window.outerHeight - GMAIL_POPUP_HEIGHT) / 2);
+    const features = [
+      'popup=yes',
+      `width=${GMAIL_POPUP_WIDTH}`,
+      `height=${GMAIL_POPUP_HEIGHT}`,
+      `left=${Math.round(left)}`,
+      `top=${Math.round(top)}`,
+      'resizable=yes',
+      'scrollbars=yes',
+    ].join(',');
+    const popup = window.open('/api/gmail/connect?popup=1', GMAIL_POPUP_NAME, features);
+
+    if (!popup) {
+      window.location.assign('/api/gmail/connect');
+      return;
+    }
+
+    popup.focus();
+  }, []);
 
   const handleAuth = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -188,27 +242,25 @@ export default function Auth() {
   };
 
   const resolveGmailAction = useCallback(
-    async (forceRelink = false) => {
-      const nextStatus = (await loadGmailStatus()) ?? gmailStatus;
-
-      if (!nextStatus.configured) {
+    (forceRelink = false) => {
+      if (!gmailStatus.configured) {
         alert(
-          'Gmail 연동이 아직 설정되지 않았습니다.\n' +
-            'GOOGLE_GMAIL_CLIENT_ID, GOOGLE_GMAIL_CLIENT_SECRET, GMAIL_COOKIE_SECRET 환경변수가 필요합니다.'
+          'Gmail linking is not configured yet.\n' +
+            'GOOGLE_GMAIL_CLIENT_ID, GOOGLE_GMAIL_CLIENT_SECRET, and GMAIL_COOKIE_SECRET are required.'
         );
         return;
       }
 
       setIsOpen(false);
 
-      if (!forceRelink && nextStatus.linked && nextStatus.redirectUrl && !nextStatus.requiresRelink) {
-        window.location.assign(nextStatus.redirectUrl);
+      if (!forceRelink && gmailStatus.linked && gmailStatus.redirectUrl && !gmailStatus.requiresRelink) {
+        window.location.assign(gmailStatus.redirectUrl);
         return;
       }
 
-      window.location.assign('/api/gmail/connect');
+      openGmailPopup();
     },
-    [gmailStatus, loadGmailStatus]
+    [gmailStatus, openGmailPopup]
   );
 
   const triggerLabel = user?.email ?? 'Pilot Access';

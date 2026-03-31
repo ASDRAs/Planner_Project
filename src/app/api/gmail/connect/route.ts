@@ -3,6 +3,7 @@ import {
   buildGmailAuthorizationUrl,
   createOAuthState,
   getGmailConfig,
+  setOAuthModeCookie,
   setOAuthStateCookie,
 } from '@/lib/gmail/server';
 
@@ -19,6 +20,8 @@ export async function GET(request: NextRequest) {
 
   const state = createOAuthState();
   const response = NextResponse.redirect(buildGmailAuthorizationUrl(config, state));
+  const popupMode = request.nextUrl.searchParams.get('popup') === '1' ? 'popup' : 'redirect';
+  setOAuthModeCookie(response, request, popupMode);
   setOAuthStateCookie(response, request, state);
   return response;
 }
