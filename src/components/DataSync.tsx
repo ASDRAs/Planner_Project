@@ -4,6 +4,7 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { exportMemosToJson, importMemosFromJson, syncMemos } from '@/lib/storage';
 import { getLocalDateString } from '@/lib/dateUtils';
+import { fetchGmailStatus } from '@/lib/gmail/client';
 import { EMPTY_GMAIL_STATUS, type GmailStatus } from '@/lib/gmail/shared';
 
 export type SyncStatus = 'idle' | 'syncing' | 'ready' | 'error';
@@ -16,14 +17,6 @@ interface DataSyncProps {
 }
 
 const POLLING_INTERVAL_MS = 60_000;
-const GMAIL_LONG_PRESS_MS = 700;
-
-function normalizeGmailStatus(status: Partial<GmailStatus>): GmailStatus {
-  return {
-    ...EMPTY_GMAIL_STATUS,
-    ...status,
-  };
-}
 
 export default function DataSync({
   onSyncComplete,
@@ -38,11 +31,9 @@ export default function DataSync({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const isSyncingRef = useRef(false);
-  const pollingTimerRef = useRef<NodeJS.Timeout | null>(null);
-  const gmailPollingTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const pollingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const gmailPollingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const onSyncCompleteRef = useRef(onSyncComplete);
-  const gmailLongPressTimerRef = useRef<number | null>(null);
-  const gmailLongPressTriggeredRef = useRef(false);
 
   useEffect(() => {
     if (onSyncStateChange) {
@@ -60,17 +51,7 @@ export default function DataSync({
 
   const refreshGmailStatus = useCallback(async () => {
     try {
-      const response = await fetch('/api/gmail/status', {
-        method: 'GET',
-        cache: 'no-store',
-      });
-
-      if (!response.ok) {
-        throw new Error('Gmail status request failed');
-      }
-
-      const nextStatus = normalizeGmailStatus((await response.json()) as Partial<GmailStatus>);
-      setGmailStatus(nextStatus);
+      setGmailStatus(await fetchGmailStatus());
     } catch (error) {
       console.error('Gmail status refresh failed:', error);
       setGmailStatus((current) => {
@@ -143,6 +124,7 @@ export default function DataSync({
     } else {
       stopPolling();
     }
+
     return () => stopPolling();
   }, [isEnabled, userId, performSync, startPolling, stopPolling]);
 
@@ -219,17 +201,6 @@ export default function DataSync({
     window.history.replaceState({}, '', nextUrl);
   }, [mounted, refreshGmailStatus]);
 
-  const clearGmailLongPressTimer = useCallback(() => {
-    if (gmailLongPressTimerRef.current !== null) {
-      window.clearTimeout(gmailLongPressTimerRef.current);
-      gmailLongPressTimerRef.current = null;
-    }
-  }, []);
-
-  useEffect(() => {
-    return () => clearGmailLongPressTimer();
-  }, [clearGmailLongPressTimer]);
-
   const handleExport = () => {
     const json = exportMemosToJson();
     const blob = new Blob([json], { type: 'application/json' });
@@ -271,49 +242,6 @@ export default function DataSync({
     setIsOpen(false);
   };
 
-  const handleGmailConnect = useCallback(() => {
-    if (!gmailStatus.configured) {
-      alert(
-        'Gmail 연동이 아직 설정되지 않았습니다.\n' +
-          'GOOGLE_GMAIL_CLIENT_ID, GOOGLE_GMAIL_CLIENT_SECRET, GMAIL_COOKIE_SECRET 환경변수가 필요합니다.'
-      );
-      return;
-    }
-
-    window.location.assign('/api/gmail/connect');
-  }, [gmailStatus.configured]);
-
-  const handleGmailClick = useCallback(() => {
-    if (gmailLongPressTriggeredRef.current) {
-      gmailLongPressTriggeredRef.current = false;
-      return;
-    }
-
-    setIsOpen(false);
-
-    if (gmailStatus.linked && gmailStatus.redirectUrl) {
-      window.location.assign(gmailStatus.redirectUrl);
-      return;
-    }
-
-    handleGmailConnect();
-  }, [gmailStatus.linked, gmailStatus.redirectUrl, handleGmailConnect]);
-
-  const handleGmailPressStart = useCallback(() => {
-    gmailLongPressTriggeredRef.current = false;
-    clearGmailLongPressTimer();
-
-    gmailLongPressTimerRef.current = window.setTimeout(() => {
-      gmailLongPressTriggeredRef.current = true;
-      setIsOpen(false);
-      handleGmailConnect();
-    }, GMAIL_LONG_PRESS_MS);
-  }, [clearGmailLongPressTimer, handleGmailConnect]);
-
-  const handleGmailPressEnd = useCallback(() => {
-    clearGmailLongPressTimer();
-  }, [clearGmailLongPressTimer]);
-
   if (!mounted) return null;
 
   const floatingContainerStyle: React.CSSProperties = {
@@ -327,13 +255,6 @@ export default function DataSync({
     maxWidth: 'calc(100vw - 2rem)',
     maxHeight: 'calc(100dvh - 7rem - env(safe-area-inset-bottom, 0px))',
   };
-
-  const gmailPrimaryLabel = gmailStatus.linked ? 'Open Gmail' : 'Link Gmail';
-  const gmailSecondaryLabel = gmailStatus.linked
-    ? gmailStatus.emailAddress || '연동된 Gmail'
-    : gmailStatus.configured
-      ? '클릭: 연동, 길게 누르기: 계정 변경'
-      : '서버 설정이 필요합니다';
 
   return createPortal(
     <div
@@ -390,47 +311,6 @@ export default function DataSync({
             Import Backup
           </button>
 
-          <button
-            onClick={handleGmailClick}
-            onPointerDown={handleGmailPressStart}
-            onPointerUp={handleGmailPressEnd}
-            onPointerLeave={handleGmailPressEnd}
-            onPointerCancel={handleGmailPressEnd}
-            onContextMenu={(event) => event.preventDefault()}
-            className="flex w-full touch-manipulation select-none items-center gap-3 rounded-2xl px-4 py-3 text-left text-[11px] font-black text-zinc-600 transition-all hover:bg-zinc-50 hover:text-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800 dark:hover:text-white"
-            title={
-              gmailStatus.linked
-                ? '클릭하면 Gmail을 열고, 길게 누르면 연동 계정을 변경합니다.'
-                : '클릭하면 Gmail을 연동합니다.'
-            }
-          >
-            <div className="relative flex-shrink-0">
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                width="16"
-                height="16"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2.5"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <rect x="3" y="5" width="18" height="14" rx="2" />
-                <path d="m3 7 9 6 9-6" />
-              </svg>
-              {gmailStatus.hasUnread && (
-                <span className="absolute -top-1 -right-1 block w-2.5 h-2.5 rounded-full bg-rose-500 shadow-[0_0_10px_rgba(244,63,94,0.9)]" />
-              )}
-            </div>
-            <div className="min-w-0 flex-1">
-              <div className="uppercase tracking-widest">{gmailPrimaryLabel}</div>
-              <div className="mt-1 text-[9px] font-semibold normal-case tracking-normal text-zinc-400 dark:text-zinc-500 truncate">
-                {gmailSecondaryLabel}
-              </div>
-            </div>
-          </button>
-
           {userId && (
             <button
               onClick={() => void performSync()}
@@ -469,16 +349,16 @@ export default function DataSync({
           onClick={() => setIsOpen(!isOpen)}
           className={`relative z-10 flex h-14 w-14 touch-manipulation items-center justify-center rounded-full shadow-2xl transition-all duration-500 active:scale-90 sm:h-16 sm:w-16 ${
             isOpen
-              ? 'bg-purple-600 text-white rotate-45 shadow-[0_0_35px_var(--eva-purple-glow)] border-2 border-purple-400'
+              ? 'rotate-45 border-2 border-purple-400 bg-purple-600 text-white shadow-[0_0_35px_var(--eva-purple-glow)]'
               : syncStatus === 'syncing'
-                ? 'bg-[var(--eva-purple)] text-white shadow-[0_0_25px_var(--eva-purple-glow)] animate-pulse'
-                : 'eva-glass text-[var(--eva-purple)] border-2 border-[var(--eva-purple)]/60 hover:scale-110 shadow-[0_0_25px_var(--eva-purple-glow)]'
+                ? 'animate-pulse bg-[var(--eva-purple)] text-white shadow-[0_0_25px_var(--eva-purple-glow)]'
+                : 'eva-glass border-2 border-[var(--eva-purple)]/60 text-[var(--eva-purple)] shadow-[0_0_25px_var(--eva-purple-glow)] hover:scale-110'
           }`}
         >
           <div className="absolute inset-0 rounded-full bg-gradient-to-br from-[var(--eva-purple)]/20 to-transparent opacity-50" />
 
           {gmailStatus.hasUnread && (
-            <span className="absolute top-1.5 right-1.5 z-30 block w-3 h-3 rounded-full bg-rose-500 border-2 border-[var(--bg-main)] shadow-[0_0_12px_rgba(244,63,94,0.9)]" />
+            <span className="absolute top-1.5 right-1.5 z-30 block h-3 w-3 rounded-full border-2 border-[var(--bg-main)] bg-rose-500 shadow-[0_0_12px_rgba(244,63,94,0.9)]" />
           )}
 
           <svg
