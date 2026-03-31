@@ -17,11 +17,12 @@ export const metadata: Metadata = {
   description: "Advanced MAGI Protocol - Neural Interface Planner",
   icons: {
     icon: [
+      { url: "/archive-app-icon-192.png", type: "image/png", sizes: "192x192" },
+      { url: "/archive-app-icon-512.png", type: "image/png", sizes: "512x512" },
       { url: "/favicon.ico", sizes: "any" },
-      { url: "/icon-512.png", type: "image/png", sizes: "512x512" },
     ],
-    shortcut: "/favicon.ico",
-    apple: "/apple-icon.png",
+    shortcut: "/archive-app-icon-192.png",
+    apple: "/archive-apple-icon.png",
   },
 };
 

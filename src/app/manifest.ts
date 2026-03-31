@@ -1,5 +1,7 @@
 import { MetadataRoute } from 'next'
 
+export const dynamic = 'force-static';
+
 export default function manifest(): MetadataRoute.Manifest {
   return {
     name: 'NEON GENESIS ARCHIVE',
@@ -11,13 +13,13 @@ export default function manifest(): MetadataRoute.Manifest {
     theme_color: '#a78bfa',
     icons: [
       {
-        src: '/icon-192.png',
+        src: '/archive-app-icon-192.png',
         sizes: '192x192',
         type: 'image/png',
-        purpose: 'maskable',
+        purpose: 'any',
       },
       {
-        src: '/icon-512.png',
+        src: '/archive-app-icon-512.png',
         sizes: '512x512',
         type: 'image/png',
         purpose: 'any',

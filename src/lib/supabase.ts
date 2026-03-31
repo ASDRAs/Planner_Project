@@ -1,10 +1,32 @@
 import { createClient } from '@supabase/supabase-js';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://placeholder.supabase.co';
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'placeholder-key';
+const RUNTIME_SUPABASE_URL_KEY = 'planner-runtime-supabase-url';
+const RUNTIME_SUPABASE_ANON_KEY = 'planner-runtime-supabase-anon-key';
 
-if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
-  console.warn("WARNING: Supabase environment variables are missing. Auth features will not work.");
+function getRuntimeConfig(): { url: string; anonKey: string } {
+  if (typeof window === 'undefined') {
+    return { url: '', anonKey: '' };
+  }
+  return {
+    url: window.localStorage.getItem(RUNTIME_SUPABASE_URL_KEY) || '',
+    anonKey: window.localStorage.getItem(RUNTIME_SUPABASE_ANON_KEY) || '',
+  };
+}
+
+const envSupabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+const envSupabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
+const runtimeConfig = getRuntimeConfig();
+
+const supabaseUrl = envSupabaseUrl || runtimeConfig.url || 'https://placeholder.supabase.co';
+const supabaseAnonKey = envSupabaseAnonKey || runtimeConfig.anonKey || 'placeholder-key';
+
+export const isSupabaseConfigured =
+  !!(envSupabaseUrl && envSupabaseAnonKey) || !!(runtimeConfig.url && runtimeConfig.anonKey);
+
+if (!isSupabaseConfigured) {
+  console.warn(
+    'WARNING: Supabase environment variables/runtime config are missing. Auth features will not work.'
+  );
 }
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
@@ -16,6 +38,18 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     storageKey: 'planner-auth-v1'
   }
 });
+
+export function setRuntimeSupabaseConfig(url: string, anonKey: string): void {
+  if (typeof window === 'undefined') return;
+  window.localStorage.setItem(RUNTIME_SUPABASE_URL_KEY, url.trim());
+  window.localStorage.setItem(RUNTIME_SUPABASE_ANON_KEY, anonKey.trim());
+}
+
+export function clearRuntimeSupabaseConfig(): void {
+  if (typeof window === 'undefined') return;
+  window.localStorage.removeItem(RUNTIME_SUPABASE_URL_KEY);
+  window.localStorage.removeItem(RUNTIME_SUPABASE_ANON_KEY);
+}
 
 /**
  * Get current session once
