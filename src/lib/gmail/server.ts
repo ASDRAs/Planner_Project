@@ -17,6 +17,7 @@ const GOOGLE_AUTH_BASE_URL = 'https://accounts.google.com/o/oauth2/v2/auth';
 const GOOGLE_TOKEN_URL = 'https://oauth2.googleapis.com/token';
 const GMAIL_PROFILE_URL = 'https://gmail.googleapis.com/gmail/v1/users/me/profile';
 const GMAIL_MESSAGES_URL = 'https://gmail.googleapis.com/gmail/v1/users/me/messages';
+const GMAIL_LABELS_URL = 'https://gmail.googleapis.com/gmail/v1/users/me/labels';
 
 const GMAIL_GRANT_MAX_AGE_SECONDS = 60 * 60 * 24 * 180;
 const GMAIL_STATE_MAX_AGE_SECONDS = 60 * 10;
@@ -57,6 +58,24 @@ interface GmailProfileResponse {
 
 interface GmailMessageListResponse {
   resultSizeEstimate?: number;
+  messages?: Array<{
+    id?: string;
+  }>;
+}
+
+interface GmailMessageResponse {
+  id?: string;
+  internalDate?: string;
+}
+
+interface GmailLabelResponse {
+  messagesUnread?: number;
+}
+
+interface GmailUnreadSummary {
+  unreadCount: number;
+  latestUnreadMessageId?: string;
+  latestUnreadInternalDate?: string;
 }
 
 export interface GmailStatusResult {
@@ -334,11 +353,12 @@ export async function fetchGmailProfile(accessToken: string): Promise<GmailProfi
   return (await response.json()) as GmailProfileResponse;
 }
 
-export async function fetchUnreadInboxCount(accessToken: string): Promise<number> {
-  const url = new URL(GMAIL_MESSAGES_URL);
-  url.searchParams.set('labelIds', 'INBOX');
-  url.searchParams.set('q', 'is:unread');
-  url.searchParams.set('maxResults', '1');
+async function fetchUnreadMessageMetadata(
+  accessToken: string,
+  messageId: string
+): Promise<GmailMessageResponse> {
+  const url = new URL(`${GMAIL_MESSAGES_URL}/${encodeURIComponent(messageId)}`);
+  url.searchParams.set('format', 'minimal');
 
   const response = await fetch(url, {
     headers: { Authorization: `Bearer ${accessToken}` },
@@ -346,11 +366,62 @@ export async function fetchUnreadInboxCount(accessToken: string): Promise<number
   });
 
   if (!response.ok) {
+    throw new Error('Failed to read Gmail message metadata');
+  }
+
+  return (await response.json()) as GmailMessageResponse;
+}
+
+async function fetchInboxUnreadCount(accessToken: string): Promise<number> {
+  const url = new URL(`${GMAIL_LABELS_URL}/INBOX`);
+
+  const response = await fetch(url, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+    cache: 'no-store',
+  });
+
+  if (!response.ok) {
+    throw new Error('Failed to read Gmail inbox label metadata');
+  }
+
+  const payload = (await response.json()) as GmailLabelResponse;
+  return payload.messagesUnread ?? 0;
+}
+
+export async function fetchUnreadInboxSummary(accessToken: string): Promise<GmailUnreadSummary> {
+  const listUrl = new URL(GMAIL_MESSAGES_URL);
+  listUrl.searchParams.set('labelIds', 'INBOX');
+  listUrl.searchParams.set('q', 'is:unread');
+  listUrl.searchParams.set('maxResults', '1');
+
+  const [unreadCount, listResponse] = await Promise.all([
+    fetchInboxUnreadCount(accessToken),
+    fetch(listUrl, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+      cache: 'no-store',
+    }),
+  ]);
+
+  if (!listResponse.ok) {
     throw new Error('Failed to read Gmail unread status');
   }
 
-  const payload = (await response.json()) as GmailMessageListResponse;
-  return payload.resultSizeEstimate ?? 0;
+  const payload = (await listResponse.json()) as GmailMessageListResponse;
+  const latestUnreadMessageId = payload.messages?.[0]?.id;
+
+  if (!latestUnreadMessageId) {
+    return {
+      unreadCount,
+    };
+  }
+
+  const latestMessage = await fetchUnreadMessageMetadata(accessToken, latestUnreadMessageId);
+
+  return {
+    unreadCount,
+    latestUnreadMessageId: latestMessage.id ?? latestUnreadMessageId,
+    latestUnreadInternalDate: latestMessage.internalDate,
+  };
 }
 
 export function setOAuthStateCookie(response: NextResponse, request: NextRequest, state: string): void {
@@ -413,17 +484,20 @@ async function buildAccountStatus(
 ): Promise<GmailStatus['accounts'][number]> {
   try {
     const accessToken = await refreshAccessToken(config, grant.refreshToken);
-    const [profile, unreadCount] = await Promise.all([
+    const [profile, unreadSummary] = await Promise.all([
       fetchGmailProfile(accessToken),
-      fetchUnreadInboxCount(accessToken),
+      fetchUnreadInboxSummary(accessToken),
     ]);
     const emailAddress = profile.emailAddress || grant.emailAddress;
 
     return {
       emailAddress,
-      unreadCount,
-      hasUnread: unreadCount > 0,
+      unreadCount: unreadSummary.unreadCount,
+      hasUnread: unreadSummary.unreadCount > 0,
       redirectUrl: buildGmailInboxUrl(emailAddress),
+      latestUnreadMessageId: unreadSummary.latestUnreadMessageId,
+      latestUnreadInternalDate: unreadSummary.latestUnreadInternalDate,
+      hasNewMail: false,
       isActive: false,
     };
   } catch (error) {
@@ -432,6 +506,7 @@ async function buildAccountStatus(
       unreadCount: 0,
       hasUnread: false,
       redirectUrl: buildGmailInboxUrl(grant.emailAddress),
+      hasNewMail: false,
       requiresRelink: true,
       error: error instanceof Error ? error.message : 'Gmail link expired',
       isActive: false,
@@ -475,6 +550,8 @@ export async function buildGmailStatusFromCollection(
       unreadCount: activeAccount?.unreadCount ?? 0,
       totalUnreadCount,
       hasUnread: decoratedAccounts.some((account) => account.hasUnread),
+      hasNewMail: false,
+      activeHasNewMail: false,
       redirectUrl: activeAccount?.redirectUrl,
       requiresRelink: activeAccount?.requiresRelink,
       error: activeAccount?.error,
