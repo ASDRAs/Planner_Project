@@ -7,6 +7,8 @@ import {
   readOAuthMode,
   GMAIL_OAUTH_STATE_COOKIE,
   getGmailConfig,
+  mergeGrantIntoCollection,
+  readGrantCollection,
   validateOAuthState,
   writeGrantCookie,
 } from '@/lib/gmail/server';
@@ -101,11 +103,15 @@ export async function GET(request: NextRequest) {
       throw new Error('Unable to resolve Gmail address');
     }
 
+    const mergedCollection = mergeGrantIntoCollection(
+      readGrantCollection(request, config.cookieSecret),
+      {
+        emailAddress: profile.emailAddress,
+        refreshToken: tokens.refresh_token,
+      }
+    );
     const response = createCompletionResponse(request, 'linked');
-    writeGrantCookie(response, request, config, {
-      emailAddress: profile.emailAddress,
-      refreshToken: tokens.refresh_token,
-    });
+    writeGrantCookie(response, request, config, mergedCollection);
     clearOAuthModeCookie(response, request);
     clearOAuthStateCookie(response, request);
     return response;

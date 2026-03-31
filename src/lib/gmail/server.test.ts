@@ -3,8 +3,13 @@
 import { describe, expect, it } from 'vitest';
 import {
   buildGmailAuthorizationUrl,
+  createGrantCollection,
   decryptGrantPayload,
+  decryptGrantCollectionPayload,
   encryptGrantPayload,
+  encryptGrantCollectionPayload,
+  mergeGrantIntoCollection,
+  setActiveGrantEmail,
 } from './server';
 
 describe('gmail server helpers', () => {
@@ -23,6 +28,104 @@ describe('gmail server helpers', () => {
     ).toEqual({
       emailAddress: 'planner.test@gmail.com',
       refreshToken: 'refresh-token-value',
+    });
+  });
+
+  it('round-trips multi-account Gmail grant collections', () => {
+    const secret = 'test-secret';
+    const encrypted = encryptGrantCollectionPayload(
+      createGrantCollection(
+        [
+          {
+            emailAddress: 'planner.one@gmail.com',
+            refreshToken: 'refresh-token-one',
+          },
+          {
+            emailAddress: 'planner.two@gmail.com',
+            refreshToken: 'refresh-token-two',
+          },
+        ],
+        'planner.two@gmail.com'
+      ),
+      secret
+    );
+
+    expect(decryptGrantCollectionPayload(encrypted, secret)).toEqual({
+      activeEmailAddress: 'planner.two@gmail.com',
+      grants: [
+        {
+          emailAddress: 'planner.one@gmail.com',
+          refreshToken: 'refresh-token-one',
+        },
+        {
+          emailAddress: 'planner.two@gmail.com',
+          refreshToken: 'refresh-token-two',
+        },
+      ],
+    });
+  });
+
+  it('upgrades legacy single-account payloads into a collection', () => {
+    const secret = 'test-secret';
+    const encrypted = encryptGrantPayload(
+      {
+        emailAddress: 'planner.legacy@gmail.com',
+        refreshToken: 'legacy-refresh-token',
+      },
+      secret
+    );
+
+    expect(decryptGrantCollectionPayload(encrypted, secret)).toEqual({
+      activeEmailAddress: 'planner.legacy@gmail.com',
+      grants: [
+        {
+          emailAddress: 'planner.legacy@gmail.com',
+          refreshToken: 'legacy-refresh-token',
+        },
+      ],
+    });
+  });
+
+  it('merges linked Gmail accounts and switches the active account', () => {
+    const merged = mergeGrantIntoCollection(
+      createGrantCollection([
+        {
+          emailAddress: 'planner.one@gmail.com',
+          refreshToken: 'refresh-token-one',
+        },
+      ]),
+      {
+        emailAddress: 'planner.two@gmail.com',
+        refreshToken: 'refresh-token-two',
+      }
+    );
+
+    expect(merged).toEqual({
+      activeEmailAddress: 'planner.two@gmail.com',
+      grants: [
+        {
+          emailAddress: 'planner.one@gmail.com',
+          refreshToken: 'refresh-token-one',
+        },
+        {
+          emailAddress: 'planner.two@gmail.com',
+          refreshToken: 'refresh-token-two',
+        },
+      ],
+    });
+
+    expect(setActiveGrantEmail(merged, 'planner.one@gmail.com')).toEqual({
+      activeEmailAddress: 'planner.one@gmail.com',
+      grants: [
+        {
+          emailAddress: 'planner.one@gmail.com',
+          refreshToken: 'refresh-token-one',
+        },
+        {
+          emailAddress: 'planner.two@gmail.com',
+          refreshToken: 'refresh-token-two',
+        },
+      ],
     });
   });
 

@@ -3,7 +3,12 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 import { User } from '@supabase/supabase-js';
-import { fetchGmailStatus } from '@/lib/gmail/client';
+import {
+  fetchGmailStatus,
+  GMAIL_STATUS_UPDATED_EVENT,
+  notifyGmailStatusUpdated,
+  setActiveGmailAccount,
+} from '@/lib/gmail/client';
 import { EMPTY_GMAIL_STATUS, type GmailStatus } from '@/lib/gmail/shared';
 
 const GMAIL_POPUP_NAME = 'planner-gmail-auth';
@@ -12,70 +17,111 @@ const GMAIL_POPUP_HEIGHT = 720;
 
 type GmailPopupStatus = 'linked' | 'denied' | 'invalid' | 'error';
 
-function GmailActionRow({
+function GmailControlPanel({
   gmailStatus,
   isLoading,
-  onPrimaryAction,
+  onLinkAction,
   onRelinkAction,
+  onSwitchAccount,
 }: {
   gmailStatus: GmailStatus;
   isLoading: boolean;
-  onPrimaryAction: () => void;
+  onLinkAction: () => void;
   onRelinkAction: () => void;
+  onSwitchAccount: (emailAddress: string) => void;
 }) {
-  const primaryLabel = gmailStatus.linked && !gmailStatus.requiresRelink ? 'Open Gmail' : 'Link Gmail';
-  const secondaryLabel = gmailStatus.requiresRelink
-    ? 'Connection expired. Please relink.'
-    : gmailStatus.linked
-      ? gmailStatus.emailAddress || 'Linked Gmail account'
-      : gmailStatus.configured
-        ? 'Connect Gmail and jump into inbox.'
-        : 'Server-side Gmail config is required.';
+  const activeAccount =
+    gmailStatus.accounts.find((account) => account.isActive) ?? gmailStatus.accounts[0] ?? null;
+  const summaryText = !gmailStatus.configured
+    ? 'Server-side Gmail config is required.'
+    : activeAccount
+      ? activeAccount.requiresRelink
+        ? 'Active Gmail needs relinking before unread sync resumes.'
+        : `${gmailStatus.accounts.length} linked inbox${gmailStatus.accounts.length > 1 ? 'es' : ''}`
+      : 'Link a Gmail account to control the floating bubble inbox shortcut.';
 
   return (
-    <div className="space-y-2 rounded-2xl border border-[var(--eva-purple)]/15 bg-[var(--eva-purple)]/5 p-3">
-      <button
-        type="button"
-        onClick={onPrimaryAction}
-        disabled={isLoading}
-        className="flex w-full touch-manipulation select-none items-center gap-3 rounded-2xl px-3 py-3 text-left text-[11px] font-black uppercase tracking-widest text-[var(--text-primary)] transition-all hover:bg-white/60 disabled:opacity-60 dark:hover:bg-zinc-900/60"
-      >
-        <div className="relative flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-2xl bg-white/70 text-[var(--eva-purple)] shadow-sm dark:bg-zinc-950/70">
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            width="18"
-            height="18"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2.5"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <rect x="3" y="5" width="18" height="14" rx="2" />
-            <path d="m3 7 9 6 9-6" />
-          </svg>
-          {gmailStatus.hasUnread && (
-            <span className="absolute -right-0.5 -top-0.5 block h-2.5 w-2.5 rounded-full bg-rose-500 shadow-[0_0_10px_rgba(244,63,94,0.9)]" />
-          )}
+    <div className="space-y-3 rounded-2xl border border-[var(--eva-purple)]/15 bg-[var(--eva-purple)]/5 p-3">
+      <div className="rounded-2xl border border-white/50 bg-white/60 px-3 py-3 dark:border-zinc-800/80 dark:bg-zinc-950/60">
+        <div className="text-[9px] font-black uppercase tracking-[0.3em] text-[var(--eva-purple)]/70">
+          Gmail Relay
         </div>
-        <div className="min-w-0 flex-1">
-          <div>{isLoading ? 'Checking Gmail' : primaryLabel}</div>
-          <div className="mt-1 truncate text-[9px] font-semibold normal-case tracking-normal text-zinc-500 dark:text-zinc-400">
-            {secondaryLabel}
-          </div>
+        <div className="mt-2 truncate text-sm font-black text-[var(--text-primary)]">
+          {activeAccount?.emailAddress ?? 'No linked Gmail account'}
         </div>
-      </button>
+        <div className="mt-1 text-[10px] font-semibold text-zinc-500 dark:text-zinc-400">
+          {summaryText}
+        </div>
+      </div>
 
-      {(gmailStatus.linked || gmailStatus.requiresRelink) && (
+      <div className={`grid gap-2 ${activeAccount ? 'sm:grid-cols-2' : ''}`}>
         <button
           type="button"
-          onClick={onRelinkAction}
+          onClick={onLinkAction}
           disabled={isLoading}
-          className="w-full touch-manipulation select-none rounded-xl border border-[var(--eva-purple)]/20 px-3 py-2 text-[10px] font-black uppercase tracking-[0.25em] text-[var(--eva-purple)] transition-all hover:bg-[var(--eva-purple)]/8 disabled:opacity-60"
+          className="rounded-2xl border border-[var(--eva-purple)]/25 bg-white/70 px-3 py-3 text-[10px] font-black uppercase tracking-[0.25em] text-[var(--eva-purple)] transition-all hover:bg-white disabled:opacity-60 dark:bg-zinc-950/70"
         >
-          Change Gmail Account
+          {gmailStatus.accounts.length > 0 ? 'Link Another Gmail' : 'Link Gmail'}
         </button>
+
+        {activeAccount && (
+          <button
+            type="button"
+            onClick={onRelinkAction}
+            disabled={isLoading}
+            className="rounded-2xl border border-[var(--eva-purple)]/15 bg-[var(--eva-purple)] px-3 py-3 text-[10px] font-black uppercase tracking-[0.25em] text-white transition-all hover:brightness-110 disabled:opacity-60"
+          >
+            {activeAccount.requiresRelink ? 'Relink Active Gmail' : 'Reauth Active Gmail'}
+          </button>
+        )}
+      </div>
+
+      {gmailStatus.accounts.length > 0 && (
+        <div className="space-y-2">
+          {gmailStatus.accounts.map((account) => (
+            <button
+              key={account.emailAddress}
+              type="button"
+              onClick={() => onSwitchAccount(account.emailAddress)}
+              disabled={isLoading || account.isActive}
+              className={`flex w-full items-center gap-3 rounded-2xl border px-3 py-3 text-left transition-all disabled:cursor-default disabled:opacity-70 ${
+                account.isActive
+                  ? 'border-[var(--eva-purple)]/30 bg-[var(--eva-purple)]/10'
+                  : 'border-zinc-200/70 bg-white/70 hover:border-[var(--eva-purple)]/30 hover:bg-white dark:border-zinc-800 dark:bg-zinc-950/60'
+              }`}
+            >
+              <div className="flex-1 min-w-0">
+                <div className="truncate text-[11px] font-black uppercase tracking-tight text-[var(--text-primary)]">
+                  {account.emailAddress}
+                </div>
+                <div className="mt-1 text-[10px] font-semibold text-zinc-500 dark:text-zinc-400">
+                  {account.requiresRelink
+                    ? 'Needs relink'
+                    : account.isActive
+                      ? 'Active inbox'
+                      : 'Switch to this inbox'}
+                  {account.unreadCount > 0 ? ` - ${account.unreadCount} unread` : ''}
+                </div>
+              </div>
+
+              <div
+                className={`rounded-full px-2.5 py-1 text-[9px] font-black uppercase tracking-[0.22em] ${
+                  account.isActive
+                    ? 'bg-[var(--eva-purple)] text-white'
+                    : 'bg-zinc-200/80 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300'
+                }`}
+              >
+                {account.isActive ? 'Active' : 'Use'}
+              </div>
+            </button>
+          ))}
+        </div>
+      )}
+
+      {gmailStatus.error && activeAccount?.requiresRelink && (
+        <div className="rounded-xl border border-amber-400/30 bg-amber-500/10 px-3 py-2 text-[10px] font-semibold text-amber-700 dark:text-amber-300">
+          {gmailStatus.error}
+        </div>
       )}
     </div>
   );
@@ -131,12 +177,15 @@ export default function Auth() {
     };
   }, [isOpen]);
 
-  const loadGmailStatus = useCallback(async () => {
+  const loadGmailStatus = useCallback(async (shouldNotify = false) => {
     setIsGmailLoading(true);
 
     try {
       const nextStatus = await fetchGmailStatus();
       setGmailStatus(nextStatus);
+      if (shouldNotify) {
+        notifyGmailStatusUpdated();
+      }
       return nextStatus;
     } catch (error) {
       console.error('Auth Gmail status refresh failed:', error);
@@ -160,6 +209,15 @@ export default function Auth() {
   }, [isOpen, loadGmailStatus]);
 
   useEffect(() => {
+    const handleGmailStatusUpdated = () => {
+      void loadGmailStatus();
+    };
+
+    window.addEventListener(GMAIL_STATUS_UPDATED_EVENT, handleGmailStatusUpdated);
+    return () => window.removeEventListener(GMAIL_STATUS_UPDATED_EVENT, handleGmailStatusUpdated);
+  }, [loadGmailStatus]);
+
+  useEffect(() => {
     const handleGmailOAuthMessage = (event: MessageEvent) => {
       if (event.origin !== window.location.origin) return;
       if (typeof event.data !== 'object' || event.data === null) return;
@@ -169,7 +227,7 @@ export default function Auth() {
       if (!status) return;
 
       if (status === 'linked') {
-        void loadGmailStatus();
+        void loadGmailStatus(true);
         return;
       }
 
@@ -241,27 +299,33 @@ export default function Auth() {
     }
   };
 
-  const resolveGmailAction = useCallback(
-    (forceRelink = false) => {
-      if (!gmailStatus.configured) {
-        alert(
-          'Gmail linking is not configured yet.\n' +
-            'GOOGLE_GMAIL_CLIENT_ID, GOOGLE_GMAIL_CLIENT_SECRET, and GMAIL_COOKIE_SECRET are required.'
-        );
-        return;
-      }
+  const handleLinkGmail = useCallback(() => {
+    if (!gmailStatus.configured) {
+      alert(
+        'Gmail linking is not configured yet.\n' +
+          'GOOGLE_GMAIL_CLIENT_ID, GOOGLE_GMAIL_CLIENT_SECRET, and GMAIL_COOKIE_SECRET are required.'
+      );
+      return;
+    }
 
-      setIsOpen(false);
+    setIsOpen(false);
+    openGmailPopup();
+  }, [gmailStatus.configured, openGmailPopup]);
 
-      if (!forceRelink && gmailStatus.linked && gmailStatus.redirectUrl && !gmailStatus.requiresRelink) {
-        window.location.assign(gmailStatus.redirectUrl);
-        return;
-      }
+  const handleSwitchGmailAccount = useCallback(async (emailAddress: string) => {
+    setIsGmailLoading(true);
 
-      openGmailPopup();
-    },
-    [gmailStatus, openGmailPopup]
-  );
+    try {
+      const nextStatus = await setActiveGmailAccount(emailAddress);
+      setGmailStatus(nextStatus);
+      notifyGmailStatusUpdated();
+    } catch (error) {
+      console.error('Gmail account switch failed:', error);
+      alert('Unable to switch the active Gmail account right now.');
+    } finally {
+      setIsGmailLoading(false);
+    }
+  }, []);
 
   const triggerLabel = user?.email ?? 'Pilot Access';
 
@@ -294,9 +358,6 @@ export default function Auth() {
               <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" />
               <circle cx="12" cy="7" r="4" />
             </svg>
-          )}
-          {gmailStatus.hasUnread && (
-            <span className="absolute -right-1 -top-1 block h-2.5 w-2.5 rounded-full bg-rose-500 shadow-[0_0_10px_rgba(244,63,94,0.9)]" />
           )}
         </div>
 
@@ -335,11 +396,12 @@ export default function Auth() {
                 </div>
               </div>
 
-              <GmailActionRow
+              <GmailControlPanel
                 gmailStatus={gmailStatus}
                 isLoading={isGmailLoading}
-                onPrimaryAction={() => void resolveGmailAction(false)}
-                onRelinkAction={() => void resolveGmailAction(true)}
+                onLinkAction={handleLinkGmail}
+                onRelinkAction={handleLinkGmail}
+                onSwitchAccount={(emailAddress) => void handleSwitchGmailAccount(emailAddress)}
               />
 
               <button
@@ -392,11 +454,12 @@ export default function Auth() {
                 {isLogin ? 'New Pilot? Create Account' : 'Existing Unit? Login'}
               </button>
 
-              <GmailActionRow
+              <GmailControlPanel
                 gmailStatus={gmailStatus}
                 isLoading={isGmailLoading}
-                onPrimaryAction={() => void resolveGmailAction(false)}
-                onRelinkAction={() => void resolveGmailAction(true)}
+                onLinkAction={handleLinkGmail}
+                onRelinkAction={handleLinkGmail}
+                onSwitchAccount={(emailAddress) => void handleSwitchGmailAccount(emailAddress)}
               />
             </div>
           )}

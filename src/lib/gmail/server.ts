@@ -26,6 +26,11 @@ export interface GmailGrantRecord {
   refreshToken: string;
 }
 
+export interface GmailGrantCollection {
+  activeEmailAddress?: string;
+  grants: GmailGrantRecord[];
+}
+
 export interface GmailServerConfig {
   clientId: string;
   clientSecret: string;
@@ -73,7 +78,7 @@ function createEncryptionKey(secret: string): Buffer {
   return createHash('sha256').update(secret, 'utf8').digest();
 }
 
-export function encryptGrantPayload(payload: GmailGrantRecord, secret: string): string {
+function encryptPayload(payload: unknown, secret: string): string {
   const iv = randomBytes(12);
   const key = createEncryptionKey(secret);
   const cipher = createCipheriv('aes-256-gcm', key, iv);
@@ -86,7 +91,7 @@ export function encryptGrantPayload(payload: GmailGrantRecord, secret: string): 
   return Buffer.concat([iv, tag, encrypted]).toString('base64url');
 }
 
-export function decryptGrantPayload(value: string, secret: string): GmailGrantRecord | null {
+function decryptPayload(value: string, secret: string): unknown | null {
   try {
     const decoded = Buffer.from(value, 'base64url');
     if (decoded.length <= 28) return null;
@@ -97,24 +102,121 @@ export function decryptGrantPayload(value: string, secret: string): GmailGrantRe
     const decipher = createDecipheriv('aes-256-gcm', createEncryptionKey(secret), iv);
     decipher.setAuthTag(tag);
 
-    const decrypted = Buffer.concat([decipher.update(encrypted), decipher.final()]).toString('utf8');
-    const parsed = JSON.parse(decrypted) as Partial<GmailGrantRecord>;
-
-    if (!parsed.emailAddress || !parsed.refreshToken) return null;
-
-    return {
-      emailAddress: parsed.emailAddress,
-      refreshToken: parsed.refreshToken,
-    };
+    return JSON.parse(
+      Buffer.concat([decipher.update(encrypted), decipher.final()]).toString('utf8')
+    ) as unknown;
   } catch {
     return null;
   }
 }
 
-function readGrantCookie(request: NextRequest, cookieSecret: string): GmailGrantRecord | null {
-  const rawCookie = request.cookies.get(GMAIL_GRANT_COOKIE)?.value;
+function normalizeGrantRecord(payload: unknown): GmailGrantRecord | null {
+  if (!payload || typeof payload !== 'object') return null;
+
+  const parsed = payload as Partial<GmailGrantRecord>;
+  if (!parsed.emailAddress || !parsed.refreshToken) return null;
+
+  return {
+    emailAddress: parsed.emailAddress,
+    refreshToken: parsed.refreshToken,
+  };
+}
+
+function dedupeGrantRecords(grants: GmailGrantRecord[]): GmailGrantRecord[] {
+  const unique = new Map<string, GmailGrantRecord>();
+
+  for (const grant of grants) {
+    unique.set(grant.emailAddress.toLowerCase(), grant);
+  }
+
+  return Array.from(unique.values());
+}
+
+export function createGrantCollection(
+  grants: GmailGrantRecord[],
+  activeEmailAddress?: string
+): GmailGrantCollection {
+  const dedupedGrants = dedupeGrantRecords(grants);
+  const fallbackActiveEmail = dedupedGrants[0]?.emailAddress;
+  const resolvedActiveEmail = dedupedGrants.some(
+    (grant) => grant.emailAddress === activeEmailAddress
+  )
+    ? activeEmailAddress
+    : fallbackActiveEmail;
+
+  return {
+    grants: dedupedGrants,
+    activeEmailAddress: resolvedActiveEmail,
+  };
+}
+
+export function encryptGrantPayload(payload: GmailGrantRecord, secret: string): string {
+  return encryptPayload(payload, secret);
+}
+
+export function decryptGrantPayload(value: string, secret: string): GmailGrantRecord | null {
+  return normalizeGrantRecord(decryptPayload(value, secret));
+}
+
+export function encryptGrantCollectionPayload(
+  payload: GmailGrantCollection,
+  secret: string
+): string {
+  return encryptPayload(createGrantCollection(payload.grants, payload.activeEmailAddress), secret);
+}
+
+export function decryptGrantCollectionPayload(
+  value: string,
+  secret: string
+): GmailGrantCollection | null {
+  const parsed = decryptPayload(value, secret);
+  if (!parsed || typeof parsed !== 'object') return null;
+
+  const singleGrant = normalizeGrantRecord(parsed);
+  if (singleGrant) {
+    return createGrantCollection([singleGrant], singleGrant.emailAddress);
+  }
+
+  const collection = parsed as Partial<GmailGrantCollection>;
+  if (!Array.isArray(collection.grants)) return null;
+
+  const grants = collection.grants
+    .map((grant) => normalizeGrantRecord(grant))
+    .filter((grant): grant is GmailGrantRecord => grant !== null);
+
+  return createGrantCollection(grants, collection.activeEmailAddress);
+}
+
+function readGrantCookieValue(request: NextRequest): string | undefined {
+  return request.cookies.get(GMAIL_GRANT_COOKIE)?.value;
+}
+
+export function readGrantCollection(
+  request: NextRequest,
+  cookieSecret: string
+): GmailGrantCollection | null {
+  const rawCookie = readGrantCookieValue(request);
   if (!rawCookie) return null;
-  return decryptGrantPayload(rawCookie, cookieSecret);
+  return decryptGrantCollectionPayload(rawCookie, cookieSecret);
+}
+
+export function mergeGrantIntoCollection(
+  existingCollection: GmailGrantCollection | null,
+  grant: GmailGrantRecord
+): GmailGrantCollection {
+  const nextGrants = [...(existingCollection?.grants ?? []).filter((entry) => entry.emailAddress !== grant.emailAddress), grant];
+  return createGrantCollection(nextGrants, grant.emailAddress);
+}
+
+export function setActiveGrantEmail(
+  collection: GmailGrantCollection,
+  emailAddress: string
+): GmailGrantCollection | null {
+  if (!collection.grants.some((grant) => grant.emailAddress === emailAddress)) {
+    return null;
+  }
+
+  return createGrantCollection(collection.grants, emailAddress);
 }
 
 export function getGmailConfig(request: NextRequest): GmailServerConfig | null {
@@ -287,17 +389,99 @@ export function writeGrantCookie(
   response: NextResponse,
   request: NextRequest,
   config: GmailServerConfig,
-  grant: GmailGrantRecord
+  grantOrCollection: GmailGrantRecord | GmailGrantCollection
 ): void {
+  const collection =
+    'grants' in grantOrCollection
+      ? createGrantCollection(grantOrCollection.grants, grantOrCollection.activeEmailAddress)
+      : createGrantCollection([grantOrCollection], grantOrCollection.emailAddress);
+
   response.cookies.set(
     GMAIL_GRANT_COOKIE,
-    encryptGrantPayload(grant, config.cookieSecret),
+    encryptGrantCollectionPayload(collection, config.cookieSecret),
     getBaseCookieOptions(request, GMAIL_GRANT_MAX_AGE_SECONDS)
   );
 }
 
 export function clearGrantCookie(response: NextResponse, request: NextRequest): void {
   response.cookies.set(GMAIL_GRANT_COOKIE, '', getBaseCookieOptions(request, 0));
+}
+
+async function buildAccountStatus(
+  config: GmailServerConfig,
+  grant: GmailGrantRecord
+): Promise<GmailStatus['accounts'][number]> {
+  try {
+    const accessToken = await refreshAccessToken(config, grant.refreshToken);
+    const [profile, unreadCount] = await Promise.all([
+      fetchGmailProfile(accessToken),
+      fetchUnreadInboxCount(accessToken),
+    ]);
+    const emailAddress = profile.emailAddress || grant.emailAddress;
+
+    return {
+      emailAddress,
+      unreadCount,
+      hasUnread: unreadCount > 0,
+      redirectUrl: buildGmailInboxUrl(emailAddress),
+      isActive: false,
+    };
+  } catch (error) {
+    return {
+      emailAddress: grant.emailAddress,
+      unreadCount: 0,
+      hasUnread: false,
+      redirectUrl: buildGmailInboxUrl(grant.emailAddress),
+      requiresRelink: true,
+      error: error instanceof Error ? error.message : 'Gmail link expired',
+      isActive: false,
+    };
+  }
+}
+
+export async function buildGmailStatusFromCollection(
+  config: GmailServerConfig,
+  collection: GmailGrantCollection | null
+): Promise<GmailStatusResult> {
+  if (!collection || collection.grants.length === 0) {
+    return {
+      status: {
+        ...EMPTY_GMAIL_STATUS,
+        configured: true,
+      },
+      clearGrant: false,
+    };
+  }
+
+  const accounts = await Promise.all(
+    collection.grants.map((grant) => buildAccountStatus(config, grant))
+  );
+  const activeEmailAddress =
+    accounts.find((account) => account.emailAddress === collection.activeEmailAddress)?.emailAddress ??
+    accounts[0]?.emailAddress;
+  const decoratedAccounts = accounts.map((account) => ({
+    ...account,
+    isActive: account.emailAddress === activeEmailAddress,
+  }));
+  const activeAccount = decoratedAccounts.find((account) => account.isActive);
+  const totalUnreadCount = decoratedAccounts.reduce((sum, account) => sum + account.unreadCount, 0);
+
+  return {
+    status: {
+      configured: true,
+      linked: decoratedAccounts.length > 0,
+      emailAddress: activeAccount?.emailAddress,
+      activeEmailAddress,
+      unreadCount: activeAccount?.unreadCount ?? 0,
+      totalUnreadCount,
+      hasUnread: decoratedAccounts.some((account) => account.hasUnread),
+      redirectUrl: activeAccount?.redirectUrl,
+      requiresRelink: activeAccount?.requiresRelink,
+      error: activeAccount?.error,
+      accounts: decoratedAccounts,
+    },
+    clearGrant: false,
+  };
 }
 
 export async function buildGmailStatus(request: NextRequest): Promise<GmailStatusResult> {
@@ -309,8 +493,8 @@ export async function buildGmailStatus(request: NextRequest): Promise<GmailStatu
     };
   }
 
-  const grant = readGrantCookie(request, config.cookieSecret);
-  if (!grant) {
+  const rawCookie = readGrantCookieValue(request);
+  if (!rawCookie) {
     return {
       status: {
         ...EMPTY_GMAIL_STATUS,
@@ -320,34 +504,16 @@ export async function buildGmailStatus(request: NextRequest): Promise<GmailStatu
     };
   }
 
-  try {
-    const accessToken = await refreshAccessToken(config, grant.refreshToken);
-    const [profile, unreadCount] = await Promise.all([
-      fetchGmailProfile(accessToken),
-      fetchUnreadInboxCount(accessToken),
-    ]);
-    const emailAddress = profile.emailAddress || grant.emailAddress;
-
-    return {
-      status: {
-        configured: true,
-        linked: true,
-        emailAddress,
-        unreadCount,
-        hasUnread: unreadCount > 0,
-        redirectUrl: buildGmailInboxUrl(emailAddress),
-      },
-      clearGrant: false,
-    };
-  } catch (error) {
+  const collection = decryptGrantCollectionPayload(rawCookie, config.cookieSecret);
+  if (!collection) {
     return {
       status: {
         ...EMPTY_GMAIL_STATUS,
         configured: true,
-        requiresRelink: true,
-        error: error instanceof Error ? error.message : 'Gmail link expired',
       },
       clearGrant: true,
     };
   }
+
+  return buildGmailStatusFromCollection(config, collection);
 }

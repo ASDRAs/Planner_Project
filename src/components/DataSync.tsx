@@ -4,7 +4,7 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { exportMemosToJson, importMemosFromJson, syncMemos } from '@/lib/storage';
 import { getLocalDateString } from '@/lib/dateUtils';
-import { fetchGmailStatus } from '@/lib/gmail/client';
+import { fetchGmailStatus, GMAIL_STATUS_UPDATED_EVENT } from '@/lib/gmail/client';
 import { EMPTY_GMAIL_STATUS, type GmailStatus } from '@/lib/gmail/shared';
 
 export type SyncStatus = 'idle' | 'syncing' | 'ready' | 'error';
@@ -58,7 +58,7 @@ export default function DataSync({
         if (!current.configured) return current;
         return {
           ...current,
-          error: 'Gmail 상태를 새로고침하지 못했습니다.',
+          error: 'Unable to refresh Gmail status.',
         };
       });
     }
@@ -138,6 +138,15 @@ export default function DataSync({
   }, [mounted, refreshGmailStatus, startGmailPolling, stopGmailPolling]);
 
   useEffect(() => {
+    const handleGmailStatusUpdated = () => {
+      void refreshGmailStatus();
+    };
+
+    window.addEventListener(GMAIL_STATUS_UPDATED_EVENT, handleGmailStatusUpdated);
+    return () => window.removeEventListener(GMAIL_STATUS_UPDATED_EVENT, handleGmailStatusUpdated);
+  }, [refreshGmailStatus]);
+
+  useEffect(() => {
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
         if (isEnabled && userId) {
@@ -189,9 +198,9 @@ export default function DataSync({
     if (!gmailResult) return;
 
     if (gmailResult === 'denied') {
-      alert('Gmail 연동이 취소되었습니다.');
+      alert('Gmail linking was canceled.');
     } else if (gmailResult !== 'linked') {
-      alert('Gmail 연동 중 오류가 발생했습니다. 다시 시도해 주세요.');
+      alert('A Gmail linking error occurred. Please try again.');
     }
 
     void refreshGmailStatus();
@@ -215,6 +224,12 @@ export default function DataSync({
     setIsOpen(false);
   };
 
+  const handleOpenGmail = () => {
+    if (!gmailStatus.redirectUrl) return;
+    window.location.assign(gmailStatus.redirectUrl);
+    setIsOpen(false);
+  };
+
   const handleImport = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -228,11 +243,11 @@ export default function DataSync({
         if (success) {
           onSyncCompleteRef.current();
         } else {
-          alert('데이터 형식이 올바르지 않습니다.');
+          alert('The selected backup file is not valid.');
         }
       } catch (err: unknown) {
         if (err instanceof Error) {
-          alert(`가져오기 실패: ${err.message}`);
+          alert(`Import failed: ${err.message}`);
         }
       }
     };
@@ -267,6 +282,35 @@ export default function DataSync({
           className="absolute bottom-16 right-0 mb-2 overflow-y-auto overscroll-contain rounded-[24px] border border-zinc-100 bg-white p-2 shadow-2xl animate-in fade-in zoom-in-95 duration-200 dark:border-zinc-800 dark:bg-zinc-900"
           style={floatingMenuStyle}
         >
+          <button
+            onClick={handleOpenGmail}
+            disabled={!gmailStatus.linked || !gmailStatus.redirectUrl}
+            className="flex w-full touch-manipulation select-none items-center gap-3 rounded-2xl px-4 py-3 text-left text-[11px] font-black uppercase tracking-widest text-zinc-600 transition-all hover:bg-zinc-50 hover:text-[var(--eva-purple)] disabled:cursor-not-allowed disabled:opacity-45 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-white"
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="3"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <rect x="3" y="5" width="18" height="14" rx="2" />
+              <path d="m3 7 9 6 9-6" />
+            </svg>
+            <div className="min-w-0 flex-1">
+              <div>Open Gmail</div>
+              <div className="mt-1 truncate text-[9px] font-semibold normal-case tracking-normal text-zinc-500 dark:text-zinc-400">
+                {gmailStatus.linked
+                  ? gmailStatus.activeEmailAddress || gmailStatus.emailAddress || 'Active linked Gmail'
+                  : 'Link Gmail from Pilot Access first.'}
+              </div>
+            </div>
+          </button>
+
           <button
             onClick={handleExport}
             className="flex w-full touch-manipulation select-none items-center gap-3 rounded-2xl px-4 py-3 text-[11px] font-black uppercase tracking-widest text-zinc-600 transition-all hover:bg-zinc-50 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-white"
@@ -345,6 +389,10 @@ export default function DataSync({
           }`}
         />
 
+        {gmailStatus.hasUnread && (
+          <span className="pointer-events-none absolute right-1.5 top-1.5 z-30 block h-3 w-3 rounded-full border-2 border-[var(--bg-main)] bg-rose-500 shadow-[0_0_12px_rgba(244,63,94,0.9)]" />
+        )}
+
         <button
           onClick={() => setIsOpen(!isOpen)}
           className={`relative z-10 flex h-14 w-14 touch-manipulation items-center justify-center rounded-full shadow-2xl transition-all duration-500 active:scale-90 sm:h-16 sm:w-16 ${
@@ -356,10 +404,6 @@ export default function DataSync({
           }`}
         >
           <div className="absolute inset-0 rounded-full bg-gradient-to-br from-[var(--eva-purple)]/20 to-transparent opacity-50" />
-
-          {gmailStatus.hasUnread && (
-            <span className="absolute top-1.5 right-1.5 z-30 block h-3 w-3 rounded-full border-2 border-[var(--bg-main)] bg-rose-500 shadow-[0_0_12px_rgba(244,63,94,0.9)]" />
-          )}
 
           <svg
             xmlns="http://www.w3.org/2000/svg"
