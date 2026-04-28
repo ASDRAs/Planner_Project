@@ -44,7 +44,7 @@
 ## Last Successful Checkpoint
 - Full application functional with stabilized Eva-01 theme, fluid adaptive UI, and zero build errors.
 - 2026-04-26: Refactor validation complete. ESLint ignores generated Tauri outputs, Next web build no longer conflicts with Gmail API routes, Tauri shell uses a minimal bundled loading page before navigating to the remote planner, and JS validation passes (`npm run lint`, `npm run build`, `npm run test`). Rust formatting passes (`cargo fmt --check`); `cargo check` is blocked by missing MSVC `link.exe` in the local environment.
-- 2026-04-28: Quest Log default window now shows schedules from yesterday through D+3 only. `Past Log` opens only older schedules, and the bottom `View Full Schedule` control expands the inline list to the full schedule. Validation passes (`npm run lint`, `npm run build`, `npm run test`).
+- 2026-04-28: Quest Log default window now shows schedules from yesterday through D+3 only. `Past Log` opens only older schedules, and the bottom `View Future Schedule` control expands the inline list to later future schedules. Validation passes (`npm run lint`, `npm run build`, `npm run test`).
 
 ## Current Blocker
 - Tauri Rust compile verification needs Visual Studio Build Tools / MSVC linker (`link.exe`) installed locally.

@@ -140,29 +140,20 @@ export default function Dashboard({ memos, onToggle, onDelete, onRefresh, userId
     [mainDateConfigs, memosByDate]
   );
   const fullScheduleSections = useMemo<DateSection[]>(() => {
-    const mainConfigByDate = new Map(mainDateConfigs.map((section) => [section.date, section]));
-    const scheduleDates = new Set([
-      ...mainDateConfigs.map((section) => section.date),
-      ...memosByDate.keys(),
-    ]);
-    const windowStartDate = getRelativeDateString(QUEST_LOG_START_OFFSET);
+    const visibleDateSet = new Set(mainDateConfigs.map((section) => section.date));
     const windowEndDate = getRelativeDateString(QUEST_LOG_END_OFFSET);
+    const futureScheduleSections = Array.from(memosByDate.entries())
+      .filter(([date]) => date > windowEndDate && !visibleDateSet.has(date))
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([date, sectionMemos]) => ({
+        title: 'Future',
+        date,
+        memos: sectionMemos,
+        accentColor: 'bg-zinc-800 text-white',
+      }));
 
-    return Array.from(scheduleDates)
-      .sort((a, b) => a.localeCompare(b))
-      .map((date) => {
-        const mainConfig = mainConfigByDate.get(date);
-
-        return {
-          title: mainConfig?.title ?? (date < windowStartDate ? 'Past' : date > windowEndDate ? 'Future' : 'Scheduled'),
-          date,
-          memos: memosByDate.get(date) ?? [],
-          accentColor: mainConfig?.accentColor ?? (date < windowStartDate ? 'bg-rose-100 dark:bg-rose-900/30 text-rose-600' : 'bg-zinc-800 text-white'),
-          isYesterday: mainConfig?.isYesterday,
-          isToday: mainConfig?.isToday,
-        };
-      });
-  }, [mainDateConfigs, memosByDate]);
+    return [...mainDateSections, ...futureScheduleSections];
+  }, [mainDateConfigs, mainDateSections, memosByDate]);
   const visibleDateSections = showFullSchedule ? fullScheduleSections : mainDateSections;
   const historyDateSections = useMemo<DateSection[]>(() => {
     const windowStartDate = getRelativeDateString(QUEST_LOG_START_OFFSET);
@@ -251,7 +242,7 @@ export default function Dashboard({ memos, onToggle, onDelete, onRefresh, userId
           <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
             {showFullSchedule ? <path d="m18 15-6-6-6 6" /> : <path d="m6 9 6 6 6-6" />}
           </svg>
-          {showFullSchedule ? 'Compact View' : 'View Full Schedule'}
+          {showFullSchedule ? 'Compact View' : 'View Future Schedule'}
         </button>
       </div>
 
