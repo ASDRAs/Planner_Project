@@ -79,7 +79,8 @@ function formatDisplayDate(dateStr: string) {
 
 export default function Dashboard({ memos, onToggle, onDelete, onRefresh, userId, onAuthChange }: DashboardProps) {
   const [activeMemo, setActiveMemo] = useState<Memo | null>(null);
-  const [showDetail, setShowDetail] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
+  const [showFullSchedule, setShowFullSchedule] = useState(false);
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
@@ -138,25 +139,44 @@ export default function Dashboard({ memos, onToggle, onDelete, onRefresh, userId
     })),
     [mainDateConfigs, memosByDate]
   );
-  const detailDateSections = useMemo<DateSection[]>(() => {
-    const mainTitleByDate = new Map(mainDateConfigs.map((section) => [section.date, section]));
+  const fullScheduleSections = useMemo<DateSection[]>(() => {
+    const mainConfigByDate = new Map(mainDateConfigs.map((section) => [section.date, section]));
+    const scheduleDates = new Set([
+      ...mainDateConfigs.map((section) => section.date),
+      ...memosByDate.keys(),
+    ]);
     const windowStartDate = getRelativeDateString(QUEST_LOG_START_OFFSET);
     const windowEndDate = getRelativeDateString(QUEST_LOG_END_OFFSET);
 
-    return Array.from(memosByDate.entries())
-      .sort(([a], [b]) => a.localeCompare(b))
-      .map(([date, sectionMemos]) => {
-        const mainConfig = mainTitleByDate.get(date);
+    return Array.from(scheduleDates)
+      .sort((a, b) => a.localeCompare(b))
+      .map((date) => {
+        const mainConfig = mainConfigByDate.get(date);
+
         return {
           title: mainConfig?.title ?? (date < windowStartDate ? 'Past' : date > windowEndDate ? 'Future' : 'Scheduled'),
           date,
-          memos: sectionMemos,
-          accentColor: mainConfig?.accentColor ?? 'bg-zinc-800 text-white',
-          isToday: mainConfig?.isToday,
+          memos: memosByDate.get(date) ?? [],
+          accentColor: mainConfig?.accentColor ?? (date < windowStartDate ? 'bg-rose-100 dark:bg-rose-900/30 text-rose-600' : 'bg-zinc-800 text-white'),
           isYesterday: mainConfig?.isYesterday,
+          isToday: mainConfig?.isToday,
         };
       });
   }, [mainDateConfigs, memosByDate]);
+  const visibleDateSections = showFullSchedule ? fullScheduleSections : mainDateSections;
+  const historyDateSections = useMemo<DateSection[]>(() => {
+    const windowStartDate = getRelativeDateString(QUEST_LOG_START_OFFSET);
+
+    return Array.from(memosByDate.entries())
+      .filter(([date]) => date < windowStartDate)
+      .sort(([a], [b]) => b.localeCompare(a))
+      .map(([date, sectionMemos]) => ({
+        title: 'Past',
+        date,
+        memos: sectionMemos,
+        accentColor: 'bg-rose-100 dark:bg-rose-900/30 text-rose-600',
+      }));
+  }, [memosByDate]);
 
   const handleDragEnd = useCallback(async (event: DragEndEvent) => {
     const { active, over } = event;
@@ -186,15 +206,15 @@ export default function Dashboard({ memos, onToggle, onDelete, onRefresh, userId
   return (
     <div className="w-full max-w-5xl mx-auto space-y-8 md:space-y-10 pb-10 font-sans text-[var(--text-primary)]">
       <div className="flex justify-end px-1">
-        <button onClick={() => setShowDetail(true)} className="flex items-center gap-2 px-4 md:px-5 py-2 md:py-2.5 rounded-full bg-[var(--eva-purple)]/10 text-[var(--eva-purple)] hover:bg-[var(--eva-purple)] hover:text-white transition-all text-[9px] md:text-[10px] font-black uppercase tracking-widest border border-[var(--eva-purple)]/20 shadow-lg shadow-[var(--eva-purple)]/5">
+        <button onClick={() => setShowHistory(true)} className="flex items-center gap-2 px-4 md:px-5 py-2 md:py-2.5 rounded-full bg-[var(--eva-purple)]/10 text-[var(--eva-purple)] hover:bg-[var(--eva-purple)] hover:text-white transition-all text-[9px] md:text-[10px] font-black uppercase tracking-widest border border-[var(--eva-purple)]/20 shadow-lg shadow-[var(--eva-purple)]/5">
           <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M12 8v4l3 3"/><circle cx="12" cy="12" r="10"/></svg>
-          Detail View
+          Past Log
         </button>
       </div>
 
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={(e) => setActiveMemo(memos.find(m => m.id === e.active.id) || null)} onDragEnd={handleDragEnd}>
         <div className="space-y-8 md:space-y-10">
-          {mainDateSections.map((section) => (
+          {visibleDateSections.map((section) => (
             <DroppableDateSection
               key={section.date}
               title={section.title}
@@ -223,18 +243,30 @@ export default function Dashboard({ memos, onToggle, onDelete, onRefresh, userId
       )}
       </DndContext>
 
-      {showDetail && mounted && createPortal(
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-in fade-in duration-200" style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', transform: 'translateZ(0)' }} onClick={() => setShowDetail(false)}>
+      <div className="flex justify-center px-1 pt-2">
+        <button
+          onClick={() => setShowFullSchedule((current) => !current)}
+          className="flex items-center gap-2 rounded-full border border-[var(--eva-purple)]/20 bg-[var(--eva-purple)]/10 px-5 py-2.5 text-[10px] font-black uppercase tracking-widest text-[var(--eva-purple)] shadow-lg shadow-[var(--eva-purple)]/5 transition-all hover:bg-[var(--eva-purple)] hover:text-white md:px-6 md:py-3"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+            {showFullSchedule ? <path d="m18 15-6-6-6 6" /> : <path d="m6 9 6 6 6-6" />}
+          </svg>
+          {showFullSchedule ? 'Compact View' : 'View Full Schedule'}
+        </button>
+      </div>
+
+      {showHistory && mounted && createPortal(
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-in fade-in duration-200" style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', transform: 'translateZ(0)' }} onClick={() => setShowHistory(false)}>
           <div className="bg-[var(--bg-main)] w-full max-w-2xl max-h-[85vh] overflow-y-auto rounded-[40px] shadow-2xl border-2 border-[var(--eva-purple)]/30 p-6 md:p-12 animate-in zoom-in-95 duration-200" onClick={e => e.stopPropagation()}>
             <div className="flex justify-between items-center mb-8 sticky top-0 bg-[var(--bg-main)]/80 backdrop-blur-md py-2 z-10">
               <div className="flex items-center gap-3">
                 <div className="p-2 md:p-3 bg-purple-600 rounded-2xl text-white shadow-xl shadow-purple-500/20"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M12 8v4l3 3"/><circle cx="12" cy="12" r="10"/></svg></div>
-                <h2 className="text-xl md:text-2xl font-black uppercase italic tracking-tighter text-[var(--text-primary)]">Quest Detail</h2>
+                <h2 className="text-xl md:text-2xl font-black uppercase italic tracking-tighter text-[var(--text-primary)]">Past Log</h2>
               </div>
-              <button onClick={() => setShowDetail(false)} className="p-2 text-zinc-400 hover:text-rose-500 transition-colors"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
+              <button onClick={() => setShowHistory(false)} className="p-2 text-zinc-400 hover:text-rose-500 transition-colors"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
             </div>
             <div className="space-y-10">
-              {detailDateSections.length === 0 ? <div className="py-20 text-center text-[var(--text-primary)]/20 font-black uppercase tracking-[0.4em] text-[9px] italic">No quest data found</div> : detailDateSections.map(section => (
+              {historyDateSections.length === 0 ? <div className="py-20 text-center text-[var(--text-primary)]/20 font-black uppercase tracking-[0.4em] text-[9px] italic">No past log found</div> : historyDateSections.map(section => (
                 <section key={section.date} className="space-y-3">
                   <header className="flex items-center gap-3 border-b border-[var(--border-subtle)] pb-2">
                     <span className={`text-[8px] md:text-[10px] font-black ${section.accentColor} px-2 md:px-3 py-0.5 md:py-1 rounded-lg tracking-widest uppercase italic shadow-sm`}>{section.title}</span>

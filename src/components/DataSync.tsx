@@ -296,9 +296,6 @@ export default function DataSync({
             disabled={!gmailStatus.linked || !gmailStatus.redirectUrl}
             className="relative flex w-full touch-manipulation select-none items-center gap-3 rounded-2xl px-4 py-3 text-left text-[11px] font-black uppercase tracking-widest text-zinc-600 transition-all hover:bg-zinc-50 hover:text-[var(--eva-purple)] disabled:cursor-not-allowed disabled:opacity-45 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-white"
           >
-            {gmailStatus.activeHasNewMail && (
-              <span className="absolute right-3 top-2 block h-2.5 w-2.5 rounded-full bg-rose-500 shadow-[0_0_10px_rgba(244,63,94,0.9)]" />
-            )}
             <svg
               xmlns="http://www.w3.org/2000/svg"
               width="16"
@@ -400,10 +397,6 @@ export default function DataSync({
             isOpen ? 'opacity-45' : 'opacity-80'
           }`}
         />
-
-          {gmailStatus.hasNewMail && (
-            <span className="pointer-events-none absolute right-1.5 top-1.5 z-30 block h-3 w-3 rounded-full border-2 border-[var(--bg-main)] bg-rose-500 shadow-[0_0_12px_rgba(244,63,94,0.9)]" />
-          )}
 
         <button
           onClick={() => setIsOpen(!isOpen)}

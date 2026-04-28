@@ -26,7 +26,7 @@ function createMemo(id: string, content: string, dayOffset: number): Memo {
 }
 
 describe('Dashboard quest schedule window', () => {
-  it('shows only yesterday through D+3 by default and reveals all schedules in detail view', async () => {
+  it('shows only yesterday through D+3 by default and expands the full schedule from the bottom view button', () => {
     const memos = [
       createMemo('past', '범위 이전 일정', -2),
       createMemo('yesterday', '어제 일정', -1),
@@ -50,9 +50,32 @@ describe('Dashboard quest schedule window', () => {
     expect(screen.getByText('3일 후 일정')).toBeInTheDocument();
     expect(screen.queryByText('4일 후 일정')).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: /Detail View/i }));
+    fireEvent.click(screen.getByRole('button', { name: /View Full Schedule/i }));
+
+    expect(screen.getByText('범위 이전 일정')).toBeInTheDocument();
+    expect(screen.getByText('4일 후 일정')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Compact View/i })).toBeInTheDocument();
+  });
+
+  it('keeps past schedules in the Past Log modal', async () => {
+    const memos = [
+      createMemo('past', '범위 이전 일정', -2),
+      createMemo('today', '오늘 일정', 0),
+    ];
+
+    render(
+      <Dashboard
+        memos={memos}
+        onToggle={vi.fn()}
+        onDelete={vi.fn()}
+        onRefresh={vi.fn()}
+      />
+    );
+
+    expect(screen.queryByText('범위 이전 일정')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /Past Log/i }));
 
     expect(await screen.findByText('범위 이전 일정')).toBeInTheDocument();
-    expect(await screen.findByText('4일 후 일정')).toBeInTheDocument();
   });
 });
