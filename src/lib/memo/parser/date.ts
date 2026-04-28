@@ -62,7 +62,7 @@ export function parseDateExpressions(input: string, context: ParseContext): Date
   // 6월 15일, 6월 15, 4/17
   const absRegex = /(?:\s|^)(\d{1,2})(월|\/)\s*(\d{1,2})(일)?(?:\s|$)/g;
   while ((match = absRegex.exec(cleanedText)) !== null) {
-    const [full, mStr, sep, dStr] = match;
+    const [full, mStr, , dStr] = match;
     const m = parseInt(mStr);
     const d = parseInt(dStr);
 

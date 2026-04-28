@@ -7,6 +7,28 @@ const GMAIL_INBOX_POPUP_NAME = 'planner-gmail-inbox';
 const GMAIL_INBOX_POPUP_WIDTH = 1180;
 const GMAIL_INBOX_POPUP_HEIGHT = 840;
 
+type TauriWindow = Window & {
+  __TAURI_INTERNALS__?: unknown;
+};
+
+function isTauriRuntime(): boolean {
+  if (typeof window === 'undefined') return false;
+  return typeof (window as TauriWindow).__TAURI_INTERNALS__ !== 'undefined';
+}
+
+async function openExternalUrlInTauri(url: string): Promise<boolean> {
+  if (!isTauriRuntime()) return false;
+
+  try {
+    const { invoke } = await import('@tauri-apps/api/core');
+    await invoke('open_external_url', { url });
+    return true;
+  } catch (error) {
+    console.error('Tauri external open failed:', error);
+    return false;
+  }
+}
+
 interface GmailSeenState {
   [emailAddress: string]: {
     latestUnreadInternalDate?: string;
@@ -184,7 +206,11 @@ export function acknowledgeActiveGmailAccount(status: GmailStatus): GmailStatus 
   };
 }
 
-export function openGmailInboxWindow(url: string): void {
+export async function openGmailInboxWindow(url: string): Promise<void> {
+  if (await openExternalUrlInTauri(url)) {
+    return;
+  }
+
   const left = window.screenX + Math.max(0, (window.outerWidth - GMAIL_INBOX_POPUP_WIDTH) / 2);
   const top = window.screenY + Math.max(0, (window.outerHeight - GMAIL_INBOX_POPUP_HEIGHT) / 2);
   const features = [

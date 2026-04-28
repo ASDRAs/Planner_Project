@@ -7,7 +7,7 @@ import MemoList from "@/components/MemoList";
 import DataSync from "@/components/DataSync";
 import Auth from "@/components/Auth";
 import ConfirmModal from "@/components/ConfirmModal";
-import { fetchMemos, deleteMemo, updateMemo, syncToCloud, Memo } from '@/lib/storage';
+import { fetchMemos, deleteMemo, updateMemo, Memo } from '@/lib/storage';
 import { supabase } from '@/lib/supabase';
 import { User } from '@supabase/supabase-js';
 
@@ -63,6 +63,38 @@ export default function Home() {
     });
     return () => subscription.unsubscribe();
   }, [loadData]);
+
+  // Keep keyboard input alive in desktop-layer mode by refocusing the Tauri window on click.
+  useEffect(() => {
+    let disposed = false;
+    let focusWindow: (() => Promise<void>) | null = null;
+
+    const loadFocusApi = async () => {
+      try {
+        const { getCurrentWindow } = await import('@tauri-apps/api/window');
+        focusWindow = () => getCurrentWindow().setFocus();
+      } catch {
+        focusWindow = null;
+      }
+    };
+
+    void loadFocusApi();
+
+    const onPointerDown = () => {
+      if (disposed) return;
+      if (focusWindow) {
+        void focusWindow();
+        return;
+      }
+      void loadFocusApi();
+    };
+
+    window.addEventListener('pointerdown', onPointerDown, true);
+    return () => {
+      disposed = true;
+      window.removeEventListener('pointerdown', onPointerDown, true);
+    };
+  }, []);
 
   const handleAuthChange = useCallback((isValid: boolean, userId: string | null) => {
     setIsSyncEnabled(isValid);

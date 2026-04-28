@@ -235,7 +235,7 @@ export default function DataSync({
     const acknowledgedStatus = acknowledgeActiveGmailAccount(gmailStatus);
     setGmailStatus(acknowledgedStatus);
     notifyGmailStatusUpdated();
-    openGmailInboxWindow(gmailStatus.redirectUrl);
+    void openGmailInboxWindow(gmailStatus.redirectUrl);
     setIsOpen(false);
   };
 

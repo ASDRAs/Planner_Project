@@ -28,7 +28,20 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import { validateSession } from '@/lib/supabase';
 
-export type AuthCheckState = "idle" | "checking" | "valid" | "invalid";
+const QUEST_LOG_START_OFFSET = -1;
+const QUEST_LOG_END_OFFSET = 3;
+
+interface DateSectionConfig {
+  title: string;
+  date: string;
+  accentColor: string;
+  isYesterday?: boolean;
+  isToday?: boolean;
+}
+
+interface DateSection extends DateSectionConfig {
+  memos: Memo[];
+}
 
 interface DashboardProps {
   memos: Memo[];
@@ -39,20 +52,42 @@ interface DashboardProps {
   onAuthChange?: (isValid: boolean, userId: string | null) => void;
 }
 
+function sortMemosForSchedule(memos: Memo[]): Memo[] {
+  return [...memos].sort((a, b) => {
+    const orderDiff = (a.order ?? 0) - (b.order ?? 0);
+    if (orderDiff !== 0) return orderDiff;
+    return a.createdAt - b.createdAt;
+  });
+}
+
+function groupMemosByDate(memos: Memo[]): Map<string, Memo[]> {
+  const grouped = new Map<string, Memo[]>();
+
+  for (const memo of sortMemosForSchedule(memos)) {
+    const existing = grouped.get(memo.targetDate) ?? [];
+    grouped.set(memo.targetDate, [...existing, memo]);
+  }
+
+  return grouped;
+}
+
+function formatDisplayDate(dateStr: string) {
+  const d = parseLocalDate(dateStr);
+  const days = ['일', '월', '화', '수', '목', '금', '토'];
+  return `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, '0')}.${String(d.getDate()).padStart(2, '0')}.(${days[d.getDay()]})`;
+}
+
 export default function Dashboard({ memos, onToggle, onDelete, onRefresh, userId, onAuthChange }: DashboardProps) {
   const [activeMemo, setActiveMemo] = useState<Memo | null>(null);
-  const [showHistory, setShowHistory] = useState(false);
+  const [showDetail, setShowDetail] = useState(false);
   const [mounted, setMounted] = useState(false);
-  const [authCheck, setAuthCheck] = useState<AuthCheckState>("idle");
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setMounted(true);
     
     const bootstrap = async () => {
-      setAuthCheck("checking");
       const { isValid, userId: validatedId } = await validateSession();
-      setAuthCheck(isValid ? "valid" : "invalid");
       if (onAuthChange) onAuthChange(isValid, validatedId);
     };
     
@@ -65,33 +100,63 @@ export default function Dashboard({ memos, onToggle, onDelete, onRefresh, userId
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
   );
 
-  // 로컬 시간 기준 날짜 계산
-  const { today, yesterday, tomorrow } = useMemo(() => ({
-    today: getLocalDateString(),
-    yesterday: getRelativeDateString(-1),
-    tomorrow: getRelativeDateString(1)
-  }), []);
+  const mainDateConfigs = useMemo<DateSectionConfig[]>(() => [
+    {
+      title: 'Yesterday',
+      date: getRelativeDateString(QUEST_LOG_START_OFFSET),
+      accentColor: 'bg-rose-100 dark:bg-rose-900/30 text-rose-600',
+      isYesterday: true,
+    },
+    {
+      title: 'Today',
+      date: getLocalDateString(),
+      accentColor: 'bg-purple-600 text-white shadow-purple-500/20',
+      isToday: true,
+    },
+    {
+      title: 'Tomorrow',
+      date: getRelativeDateString(1),
+      accentColor: 'bg-green-500 text-white shadow-green-500/20',
+    },
+    {
+      title: 'D+2',
+      date: getRelativeDateString(2),
+      accentColor: 'bg-zinc-800 text-white',
+    },
+    {
+      title: 'D+3',
+      date: getRelativeDateString(QUEST_LOG_END_OFFSET),
+      accentColor: 'bg-zinc-800 text-white',
+    },
+  ], []);
 
-  const {
-    yesterdayMemos,
-    todayMemos,
-    tomorrowMemos,
-    upcomingMemosRaw,
-    upcomingDates,
-    historyMemos,
-    historyDates
-  } = useMemo(() => {
-    const yesterdayMemos = memos.filter(m => m.targetDate === yesterday);
-    const todayMemos = memos.filter(m => m.targetDate === today);
-    const tomorrowMemos = memos.filter(m => m.targetDate === tomorrow);
-    const upcomingMemosRaw = memos.filter(m => m.targetDate > tomorrow);
-    const upcomingDates = Array.from(new Set(upcomingMemosRaw.map(m => m.targetDate))).sort();
-    
-    const historyMemos = memos.filter(m => m.targetDate < yesterday).sort((a, b) => b.targetDate.localeCompare(a.targetDate));
-    const historyDates = Array.from(new Set(historyMemos.map(m => m.targetDate)));
+  const memosByDate = useMemo(() => groupMemosByDate(memos), [memos]);
+  const mainDateSections = useMemo<DateSection[]>(
+    () => mainDateConfigs.map((section) => ({
+      ...section,
+      memos: memosByDate.get(section.date) ?? [],
+    })),
+    [mainDateConfigs, memosByDate]
+  );
+  const detailDateSections = useMemo<DateSection[]>(() => {
+    const mainTitleByDate = new Map(mainDateConfigs.map((section) => [section.date, section]));
+    const windowStartDate = getRelativeDateString(QUEST_LOG_START_OFFSET);
+    const windowEndDate = getRelativeDateString(QUEST_LOG_END_OFFSET);
 
-    return { yesterdayMemos, todayMemos, tomorrowMemos, upcomingMemosRaw, upcomingDates, historyMemos, historyDates };
-  }, [memos, today, yesterday, tomorrow]);
+    return Array.from(memosByDate.entries())
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([date, sectionMemos]) => {
+        const mainConfig = mainTitleByDate.get(date);
+        return {
+          title: mainConfig?.title ?? (date < windowStartDate ? 'Past' : date > windowEndDate ? 'Future' : 'Scheduled'),
+          date,
+          memos: sectionMemos,
+          accentColor: mainConfig?.accentColor ?? 'bg-zinc-800 text-white',
+          isToday: mainConfig?.isToday,
+          isYesterday: mainConfig?.isYesterday,
+        };
+      });
+  }, [mainDateConfigs, memosByDate]);
 
   const handleDragEnd = useCallback(async (event: DragEndEvent) => {
     const { active, over } = event;
@@ -121,19 +186,29 @@ export default function Dashboard({ memos, onToggle, onDelete, onRefresh, userId
   return (
     <div className="w-full max-w-5xl mx-auto space-y-8 md:space-y-10 pb-10 font-sans text-[var(--text-primary)]">
       <div className="flex justify-end px-1">
-        <button onClick={() => setShowHistory(true)} className="flex items-center gap-2 px-4 md:px-5 py-2 md:py-2.5 rounded-full bg-[var(--eva-purple)]/10 text-[var(--eva-purple)] hover:bg-[var(--eva-purple)] hover:text-white transition-all text-[9px] md:text-[10px] font-black uppercase tracking-widest border border-[var(--eva-purple)]/20 shadow-lg shadow-[var(--eva-purple)]/5">
+        <button onClick={() => setShowDetail(true)} className="flex items-center gap-2 px-4 md:px-5 py-2 md:py-2.5 rounded-full bg-[var(--eva-purple)]/10 text-[var(--eva-purple)] hover:bg-[var(--eva-purple)] hover:text-white transition-all text-[9px] md:text-[10px] font-black uppercase tracking-widest border border-[var(--eva-purple)]/20 shadow-lg shadow-[var(--eva-purple)]/5">
           <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M12 8v4l3 3"/><circle cx="12" cy="12" r="10"/></svg>
-          Archive Registry
+          Detail View
         </button>
       </div>
 
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={(e) => setActiveMemo(memos.find(m => m.id === e.active.id) || null)} onDragEnd={handleDragEnd}>
         <div className="space-y-8 md:space-y-10">
-          <DroppableDateSection title="Yesterday" date={yesterday} memos={yesterdayMemos} onToggle={onToggle} onDelete={onDelete} onRefresh={onRefresh} accentColor="bg-rose-100 dark:bg-rose-900/30 text-rose-600" isYesterday userId={userId} />
-          <DroppableDateSection title="Today" date={today} memos={todayMemos} onToggle={onToggle} onDelete={onDelete} onRefresh={onRefresh} accentColor="bg-purple-600 text-white shadow-purple-500/20" showStatus={todayMemos.some(m => !m.completed)} isToday userId={userId} />
-          <DroppableDateSection title="Tomorrow" date={tomorrow} memos={tomorrowMemos} onToggle={onToggle} onDelete={onDelete} onRefresh={onRefresh} accentColor="bg-green-500 text-white shadow-green-500/20" userId={userId} />
-          {upcomingDates.map(date => (
-            <DroppableDateSection key={date} title="Upcoming" date={date} memos={upcomingMemosRaw.filter(m => m.targetDate === date)} onToggle={onToggle} onDelete={onDelete} onRefresh={onRefresh} accentColor="bg-zinc-800 text-white" userId={userId} />
+          {mainDateSections.map((section) => (
+            <DroppableDateSection
+              key={section.date}
+              title={section.title}
+              date={section.date}
+              memos={section.memos}
+              onToggle={onToggle}
+              onDelete={onDelete}
+              onRefresh={onRefresh}
+              accentColor={section.accentColor}
+              showStatus={section.isToday && section.memos.some(m => !m.completed)}
+              isYesterday={section.isYesterday}
+              isToday={section.isToday}
+              userId={userId}
+            />
           ))}
         </div>
       {mounted && createPortal(
@@ -148,25 +223,24 @@ export default function Dashboard({ memos, onToggle, onDelete, onRefresh, userId
       )}
       </DndContext>
 
-      {showHistory && mounted && createPortal(
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-in fade-in duration-200" style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', transform: 'translateZ(0)' }} onClick={() => setShowHistory(false)}>
+      {showDetail && mounted && createPortal(
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-in fade-in duration-200" style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', transform: 'translateZ(0)' }} onClick={() => setShowDetail(false)}>
           <div className="bg-[var(--bg-main)] w-full max-w-2xl max-h-[85vh] overflow-y-auto rounded-[40px] shadow-2xl border-2 border-[var(--eva-purple)]/30 p-6 md:p-12 animate-in zoom-in-95 duration-200" onClick={e => e.stopPropagation()}>
             <div className="flex justify-between items-center mb-8 sticky top-0 bg-[var(--bg-main)]/80 backdrop-blur-md py-2 z-10">
               <div className="flex items-center gap-3">
                 <div className="p-2 md:p-3 bg-purple-600 rounded-2xl text-white shadow-xl shadow-purple-500/20"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M12 8v4l3 3"/><circle cx="12" cy="12" r="10"/></svg></div>
-                <h2 className="text-xl md:text-2xl font-black uppercase italic tracking-tighter text-[var(--text-primary)]">Quest History</h2>
+                <h2 className="text-xl md:text-2xl font-black uppercase italic tracking-tighter text-[var(--text-primary)]">Quest Detail</h2>
               </div>
-              <button onClick={() => setShowHistory(false)} className="p-2 text-zinc-400 hover:text-rose-500 transition-colors"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
+              <button onClick={() => setShowDetail(false)} className="p-2 text-zinc-400 hover:text-rose-500 transition-colors"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
             </div>
             <div className="space-y-10">
-              {historyDates.length === 0 ? <div className="py-20 text-center text-[var(--text-primary)]/20 font-black uppercase tracking-[0.4em] text-[9px] italic">No archive data found</div> : historyDates.map(date => (
-                <section key={date} className="space-y-3">
+              {detailDateSections.length === 0 ? <div className="py-20 text-center text-[var(--text-primary)]/20 font-black uppercase tracking-[0.4em] text-[9px] italic">No quest data found</div> : detailDateSections.map(section => (
+                <section key={section.date} className="space-y-3">
                   <header className="flex items-center gap-3 border-b border-[var(--border-subtle)] pb-2">
-                    <span className="text-[10px] md:text-[11px] font-black text-[var(--eva-purple)] uppercase tracking-[0.2em]">
-                      {parseLocalDate(date).toLocaleDateString('ko-KR', { year: 'numeric', month: '2-digit', day: '2-digit', weekday: 'short' })}
-                    </span>
+                    <span className={`text-[8px] md:text-[10px] font-black ${section.accentColor} px-2 md:px-3 py-0.5 md:py-1 rounded-lg tracking-widest uppercase italic shadow-sm`}>{section.title}</span>
+                    <span className="text-[10px] md:text-[11px] font-black text-[var(--eva-purple)] uppercase tracking-[0.2em]">{formatDisplayDate(section.date)}</span>
                   </header>
-                  <div className="grid grid-cols-1 gap-2">{historyMemos.filter(m => m.targetDate === date).map(m => <MemoRow key={m.id} memo={m} onToggle={onToggle} onDelete={onDelete} onRefresh={onRefresh} userId={userId} />)}</div>
+                  <div className="grid grid-cols-1 gap-2">{section.memos.map(m => <MemoRow key={m.id} memo={m} onToggle={onToggle} onDelete={onDelete} onRefresh={onRefresh} userId={userId} />)}</div>
                 </section>
               ))}
             </div>
@@ -194,12 +268,6 @@ interface DroppableDateSectionProps {
 
 function DroppableDateSection({ title, date, memos, onToggle, onDelete, onRefresh, accentColor, showStatus, isYesterday, isToday, userId }: DroppableDateSectionProps) {
   const { setNodeRef, isOver } = useDroppable({ id: date });
-  const formatDate = (dateStr: string) => {
-    const d = parseLocalDate(dateStr);
-    const days = ['일', '월', '화', '수', '목', '금', '토'];
-    return `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, '0')}.${String(d.getDate()).padStart(2, '0')}.(${days[d.getDay()]})`;
-  };
-
   const completedCount = memos.filter((m) => m.completed).length;
   const totalCount = memos.length;
   const progress = totalCount > 0 ? (completedCount / totalCount) * 100 : 0;
@@ -212,7 +280,7 @@ function DroppableDateSection({ title, date, memos, onToggle, onDelete, onRefres
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3 md:gap-4">
             <span className={`text-[8px] md:text-[10px] font-black ${accentColor} px-2 md:px-3 py-0.5 md:py-1 rounded-lg tracking-widest uppercase italic shadow-sm`}>{title}</span>
-            <h3 className="text-xs md:text-sm font-black text-[var(--text-primary)] tracking-tight uppercase">{formatDate(date)}</h3>
+            <h3 className="text-xs md:text-sm font-black text-[var(--text-primary)] tracking-tight uppercase">{formatDisplayDate(date)}</h3>
           </div>
           {showStatus && <span className="w-2 md:w-2.5 h-2 md:h-2.5 bg-[var(--eva-green)] rounded-full animate-pulse shadow-[0_0_12px_rgba(74,222,128,0.8)]" />}
         </div>

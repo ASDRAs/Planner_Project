@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { processMemo } from './pipeline';
 
 // Spec: 파이프라인은 다음 5단계를 거쳐야 하며, 결과물은 결정론적(deterministic)이어야 함.

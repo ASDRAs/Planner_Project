@@ -9,7 +9,7 @@ function extractUrl(url: unknown): string {
 }
 
 // Mocking fetch globally
-global.fetch = vi.fn((url) => {
+const fetchMock = vi.fn((url: Parameters<typeof fetch>[0]) => {
   const normalizedUrl = extractUrl(url);
 
   if (
@@ -47,7 +47,9 @@ global.fetch = vi.fn((url) => {
     status: 200,
     statusText: 'OK',
   });
-}) as any;
+});
+
+global.fetch = fetchMock as unknown as typeof fetch;
 
 // Mocking Transformers.js pipeline
 vi.mock('@xenova/transformers', () => ({

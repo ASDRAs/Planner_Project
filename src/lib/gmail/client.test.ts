@@ -1,6 +1,11 @@
-import { beforeEach, describe, expect, it } from 'vitest';
-import { acknowledgeActiveGmailAccount, applyNewMailState } from './client';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { invoke } from '@tauri-apps/api/core';
+import { acknowledgeActiveGmailAccount, applyNewMailState, openGmailInboxWindow } from './client';
 import { buildGmailInboxUrl, EMPTY_GMAIL_STATUS, type GmailStatus } from './shared';
+
+vi.mock('@tauri-apps/api/core', () => ({
+  invoke: vi.fn(),
+}));
 
 function createStatus(overrides?: Partial<GmailStatus>): GmailStatus {
   return {
@@ -26,7 +31,10 @@ function createStatus(overrides?: Partial<GmailStatus>): GmailStatus {
 
 describe('gmail client helpers', () => {
   beforeEach(() => {
+    vi.restoreAllMocks();
     window.localStorage.clear();
+    vi.clearAllMocks();
+    Reflect.deleteProperty(window as Window & Record<string, unknown>, '__TAURI_INTERNALS__');
   });
 
   it('does not flag existing unread mail as new on first observation', () => {
@@ -129,5 +137,18 @@ describe('gmail client helpers', () => {
     expect(buildGmailInboxUrl('pilot@gmail.com')).toBe(
       'https://mail.google.com/mail/?authuser=pilot%40gmail.com#inbox'
     );
+  });
+
+  it('opens Gmail through the Tauri bridge when running inside the desktop shell', async () => {
+    const openSpy = vi.spyOn(window, 'open').mockImplementation(() => null);
+    const invokeMock = vi.mocked(invoke);
+    (window as Window & Record<string, unknown>).__TAURI_INTERNALS__ = {};
+
+    await openGmailInboxWindow(buildGmailInboxUrl('pilot@gmail.com'));
+
+    expect(invokeMock).toHaveBeenCalledWith('open_external_url', {
+      url: buildGmailInboxUrl('pilot@gmail.com'),
+    });
+    expect(openSpy).not.toHaveBeenCalled();
   });
 });

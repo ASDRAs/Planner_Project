@@ -19,10 +19,14 @@
 
 # production
 /build
+/src-tauri/target/
+/src-tauri/gen/schemas/
 
 # misc
 .DS_Store
 *.pem
+.codex_tmp*
+.codex_extracted_images/
 
 # debug
 npm-debug.log*
