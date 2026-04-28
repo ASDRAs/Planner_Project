@@ -1,54 +1,86 @@
 import { fireEvent, render, screen } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 import DailyQuestPanel from './DailyQuestPanel';
+import { LOCAL_DAILY_QUEST_STORAGE_KEY } from '@/lib/constants';
 import { getLocalDateString, getRelativeDateString } from '@/lib/dateUtils';
-import type { Memo } from '@/lib/storage';
+import type { DailyQuest } from '@/lib/dailyQuests';
 
-function createMemo(id: string, content: string, targetDate: string, completed = false): Memo {
-  return {
-    id,
-    content,
-    category: 'TODO',
-    priority: id === 'critical' ? 'High' : 'Medium',
-    tags: [],
-    createdAt: Date.now(),
-    targetDate,
-    completed,
-  };
+function seedDailyQuests(quests: DailyQuest[]): void {
+  localStorage.setItem(LOCAL_DAILY_QUEST_STORAGE_KEY, JSON.stringify(quests));
 }
 
 describe('DailyQuestPanel', () => {
-  it('summarizes today TODO quests without showing future schedule items', () => {
-    const today = getLocalDateString();
-    const memos = [
-      createMemo('critical', 'Daily critical quest', today, true),
-      createMemo('standard', 'Daily standard quest', today),
-      createMemo('future', 'Future quest', getRelativeDateString(1)),
-    ];
+  beforeEach(() => {
+    localStorage.clear();
+  });
 
-    render(<DailyQuestPanel memos={memos} onToggle={vi.fn()} />);
+  it('starts from separate daily quest storage instead of TODO memos', () => {
+    seedDailyQuests([
+      {
+        id: 'daily-1',
+        title: 'Hydration routine',
+        createdAt: Date.now(),
+        order: 1,
+      },
+    ]);
+
+    render(<DailyQuestPanel />);
 
     expect(screen.getByText('Daily Quest')).toBeInTheDocument();
-    expect(screen.getByText('50%')).toBeInTheDocument();
-    expect(screen.getByText('1/2 Clear')).toBeInTheDocument();
-    expect(screen.getByText('Daily critical quest')).toBeInTheDocument();
-    expect(screen.getByText('Daily standard quest')).toBeInTheDocument();
-    expect(screen.queryByText('Future quest')).not.toBeInTheDocument();
+    expect(screen.getByText('Hydration routine')).toBeInTheDocument();
+    expect(screen.getByText('0/1 Clear')).toBeInTheDocument();
   });
 
-  it('toggles a daily quest from the panel', () => {
-    const onToggle = vi.fn();
-    render(<DailyQuestPanel memos={[createMemo('standard', 'Daily standard quest', getLocalDateString())]} onToggle={onToggle} />);
+  it('adds and toggles a separate daily quest', () => {
+    render(<DailyQuestPanel />);
 
-    fireEvent.click(screen.getByRole('button', { name: /Daily standard quest/i }));
+    fireEvent.change(screen.getByLabelText('New daily quest'), { target: { value: 'Read design notes' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Add daily quest' }));
 
-    expect(onToggle).toHaveBeenCalledWith('standard');
+    expect(screen.getByText('Read design notes')).toBeInTheDocument();
+    expect(screen.getByText('0/1 Clear')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Toggle Read design notes' }));
+
+    expect(screen.getByText('100%')).toBeInTheDocument();
+    expect(screen.getByText('1/1 Clear')).toBeInTheDocument();
+    expect(JSON.parse(localStorage.getItem(LOCAL_DAILY_QUEST_STORAGE_KEY) ?? '[]')[0].lastCompletedDate).toBe(getLocalDateString());
   });
 
-  it('renders an empty daily quest state', () => {
-    render(<DailyQuestPanel memos={[]} onToggle={vi.fn()} />);
+  it('treats yesterday completion as open today', () => {
+    seedDailyQuests([
+      {
+        id: 'daily-1',
+        title: 'Stretching',
+        createdAt: Date.now(),
+        order: 1,
+        lastCompletedDate: getRelativeDateString(-1),
+      },
+    ]);
+
+    render(<DailyQuestPanel />);
 
     expect(screen.getByText('0%')).toBeInTheDocument();
+    expect(screen.getByText('0/1 Clear')).toBeInTheDocument();
+    expect(screen.getByText('Open')).toBeInTheDocument();
+  });
+
+  it('deletes a daily quest without touching memo storage', () => {
+    seedDailyQuests([
+      {
+        id: 'daily-1',
+        title: 'Stretching',
+        createdAt: Date.now(),
+        order: 1,
+      },
+    ]);
+
+    render(<DailyQuestPanel />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Delete Stretching' }));
+
+    expect(screen.queryByText('Stretching')).not.toBeInTheDocument();
     expect(screen.getByText('No daily quests assigned')).toBeInTheDocument();
+    expect(localStorage.getItem(LOCAL_DAILY_QUEST_STORAGE_KEY)).toBe('[]');
   });
 });

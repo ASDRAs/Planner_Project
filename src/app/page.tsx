@@ -183,7 +183,7 @@ export default function Home() {
             Quest Log
             <span className="text-[clamp(8px,0.7vw,10px)] text-[var(--eva-green)] font-black ml-2 animate-pulse tracking-[0.3em] bg-[var(--eva-green)]/10 px-2.5 py-1 rounded-lg border border-[var(--eva-green)]/20 shadow-[0_0_10px_rgba(74,222,128,0.1)] uppercase italic">Established</span>
           </h2>
-          <DailyQuestPanel memos={todoMemos} onToggle={handleToggle} />
+          <DailyQuestPanel />
           <Dashboard 
             memos={todoMemos} 
             onToggle={handleToggle} 

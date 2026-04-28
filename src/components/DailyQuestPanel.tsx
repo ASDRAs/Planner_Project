@@ -1,32 +1,47 @@
 'use client';
 
-import React, { useMemo } from 'react';
+import React, { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
+import {
+  addDailyQuest,
+  deleteDailyQuest,
+  getDailyQuests,
+  isDailyQuestCompleted,
+  toggleDailyQuest,
+  type DailyQuest,
+} from '@/lib/dailyQuests';
 import { getLocalDateString } from '@/lib/dateUtils';
-import type { Memo } from '@/lib/storage';
 
-interface DailyQuestPanelProps {
-  memos: Memo[];
-  onToggle: (id: string) => void;
-}
-
-function getDailyQuests(memos: Memo[]): Memo[] {
+export default function DailyQuestPanel() {
+  const [quests, setQuests] = useState<DailyQuest[]>([]);
+  const [draftTitle, setDraftTitle] = useState('');
   const today = getLocalDateString();
 
-  return memos
-    .filter((memo) => memo.category === 'TODO' && memo.targetDate === today)
-    .sort((a, b) => {
-      if (a.completed !== b.completed) return a.completed ? 1 : -1;
-      if (a.priority !== b.priority) return a.priority === 'High' ? -1 : b.priority === 'High' ? 1 : 0;
-      return (a.order ?? 0) - (b.order ?? 0) || a.createdAt - b.createdAt;
-    });
-}
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setQuests(getDailyQuests());
+  }, []);
 
-export default function DailyQuestPanel({ memos, onToggle }: DailyQuestPanelProps) {
-  const dailyQuests = useMemo(() => getDailyQuests(memos), [memos]);
-  const completedCount = dailyQuests.filter((quest) => quest.completed).length;
-  const incompleteCount = dailyQuests.length - completedCount;
-  const progress = dailyQuests.length > 0 ? Math.round((completedCount / dailyQuests.length) * 100) : 0;
-  const visibleQuests = dailyQuests.slice(0, 4);
+  const completedCount = useMemo(
+    () => quests.filter((quest) => isDailyQuestCompleted(quest, today)).length,
+    [quests, today]
+  );
+  const incompleteCount = quests.length - completedCount;
+  const progress = quests.length > 0 ? Math.round((completedCount / quests.length) * 100) : 0;
+
+  const handleAdd = useCallback((event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const nextQuests = addDailyQuest(draftTitle);
+    setQuests(nextQuests);
+    if (draftTitle.trim()) setDraftTitle('');
+  }, [draftTitle]);
+
+  const handleToggle = useCallback((id: string) => {
+    setQuests(toggleDailyQuest(id, today));
+  }, [today]);
+
+  const handleDelete = useCallback((id: string) => {
+    setQuests(deleteDailyQuest(id));
+  }, []);
 
   return (
     <section className="mb-[clamp(1.5rem,4vh,2.5rem)] border-y border-[var(--eva-purple)]/15 bg-[var(--eva-purple)]/[0.03] px-[clamp(0.75rem,2vw,1.25rem)] py-[clamp(1rem,2.5vw,1.5rem)]">
@@ -37,15 +52,15 @@ export default function DailyQuestPanel({ memos, onToggle }: DailyQuestPanelProp
               Daily Quest
             </span>
             <h3 className="text-[clamp(1rem,1.5vw,1.25rem)] font-black uppercase italic tracking-tighter text-[var(--text-primary)]">
-              Today&apos;s Objectives
+              Routine Objectives
             </h3>
             <span className="text-[9px] font-black uppercase tracking-[0.24em] text-[var(--text-primary)]/35">
-              {completedCount}/{dailyQuests.length} Clear
+              {completedCount}/{quests.length} Clear
             </span>
           </div>
           <div className="h-2 max-w-xl overflow-hidden rounded-full border border-[var(--border-subtle)] bg-black/10 dark:bg-white/5">
             <div
-              className={`h-full transition-all duration-700 ${progress === 100 && dailyQuests.length > 0 ? 'bg-[var(--eva-green)]' : 'bg-[var(--eva-purple)]'}`}
+              className={`h-full transition-all duration-700 ${progress === 100 && quests.length > 0 ? 'bg-[var(--eva-green)]' : 'bg-[var(--eva-purple)]'}`}
               style={{ width: `${progress}%` }}
             />
           </div>
@@ -57,7 +72,7 @@ export default function DailyQuestPanel({ memos, onToggle }: DailyQuestPanelProp
               {progress}%
             </div>
             <div className="text-[8px] font-black uppercase tracking-[0.28em] text-[var(--text-primary)]/35">
-              Sync Ratio
+              Clear Rate
             </div>
           </div>
           {incompleteCount > 0 && (
@@ -66,43 +81,83 @@ export default function DailyQuestPanel({ memos, onToggle }: DailyQuestPanelProp
         </div>
       </div>
 
+      <form onSubmit={handleAdd} className="mt-5 flex gap-2">
+        <input
+          aria-label="New daily quest"
+          value={draftTitle}
+          onChange={(event) => setDraftTitle(event.target.value)}
+          className="min-w-0 flex-1 rounded-xl border border-[var(--eva-purple)]/20 bg-black/[0.03] px-4 py-2.5 text-sm font-bold text-[var(--text-primary)] outline-none transition-all placeholder:text-[var(--text-primary)]/25 focus:border-[var(--eva-purple)]/60 dark:bg-white/[0.04]"
+          placeholder="New daily quest"
+        />
+        <button
+          type="submit"
+          aria-label="Add daily quest"
+          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-[var(--eva-green)]/30 bg-[var(--eva-green)]/15 text-[var(--eva-green)] transition-all hover:bg-[var(--eva-green)] hover:text-black"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M12 5v14" />
+            <path d="M5 12h14" />
+          </svg>
+        </button>
+      </form>
+
       <div className="mt-5 grid grid-cols-1 gap-2 md:grid-cols-2">
-        {visibleQuests.length === 0 ? (
+        {quests.length === 0 ? (
           <div className="col-span-full py-4 text-center text-[9px] font-black uppercase italic tracking-[0.3em] text-[var(--text-primary)]/25">
             No daily quests assigned
           </div>
-        ) : visibleQuests.map((quest) => (
-          <button
-            key={quest.id}
-            type="button"
-            onClick={() => onToggle(quest.id)}
-            className={`group flex min-h-12 items-center gap-3 rounded-xl border px-3 py-2 text-left transition-all ${
-              quest.completed
-                ? 'border-[var(--border-subtle)] bg-black/[0.02] text-[var(--text-primary)]/35'
-                : quest.priority === 'High'
-                  ? 'border-rose-500/25 bg-rose-500/[0.04] text-[var(--text-primary)] hover:border-rose-500/50'
+        ) : quests.map((quest) => {
+          const completed = isDailyQuestCompleted(quest, today);
+
+          return (
+            <div
+              key={quest.id}
+              className={`group flex min-h-12 items-center gap-2 rounded-xl border px-3 py-2 transition-all ${
+                completed
+                  ? 'border-[var(--border-subtle)] bg-black/[0.02] text-[var(--text-primary)]/35'
                   : 'border-[var(--eva-purple)]/20 bg-[var(--eva-purple)]/[0.04] text-[var(--text-primary)] hover:border-[var(--eva-purple)]/45'
-            }`}
-          >
-            <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-lg border text-[10px] font-black ${
-              quest.completed
-                ? 'border-[var(--eva-green)] bg-[var(--eva-green)] text-black'
-                : 'border-current text-current'
-            }`}>
-              {quest.completed ? (
-                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M20 6 9 17l-5-5" />
+              }`}
+            >
+              <button
+                type="button"
+                aria-label={`Toggle ${quest.title}`}
+                aria-pressed={completed}
+                onClick={() => handleToggle(quest.id)}
+                className="flex min-w-0 flex-1 items-center gap-3 text-left"
+              >
+                <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-lg border text-[10px] font-black ${
+                  completed
+                    ? 'border-[var(--eva-green)] bg-[var(--eva-green)] text-black'
+                    : 'border-current text-current'
+                }`}>
+                  {completed && (
+                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M20 6 9 17l-5-5" />
+                    </svg>
+                  )}
+                </span>
+                <span className={`min-w-0 flex-1 truncate text-sm font-bold ${completed ? 'line-through' : ''}`}>
+                  {quest.title}
+                </span>
+                <span className="text-[8px] font-black uppercase tracking-widest text-[var(--text-primary)]/30">
+                  {completed ? 'Clear' : 'Open'}
+                </span>
+              </button>
+              <button
+                type="button"
+                aria-label={`Delete ${quest.title}`}
+                onClick={() => handleDelete(quest.id)}
+                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-[var(--text-primary)]/25 transition-all hover:bg-rose-500/10 hover:text-rose-500"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M3 6h18" />
+                  <path d="M8 6V4h8v2" />
+                  <path d="M19 6l-1 14H6L5 6" />
                 </svg>
-              ) : quest.priority === 'High' ? '!' : ''}
-            </span>
-            <span className={`min-w-0 flex-1 truncate text-sm font-bold ${quest.completed ? 'line-through' : ''}`}>
-              {quest.content}
-            </span>
-            <span className="text-[8px] font-black uppercase tracking-widest text-[var(--text-primary)]/30">
-              {quest.completed ? 'Clear' : quest.priority}
-            </span>
-          </button>
-        ))}
+              </button>
+            </div>
+          );
+        })}
       </div>
     </section>
   );
