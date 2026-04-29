@@ -1,7 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it } from 'vitest';
 import DailyQuestPanel from './DailyQuestPanel';
-import { LOCAL_DAILY_QUEST_STORAGE_KEY } from '@/lib/constants';
+import { LOCAL_DAILY_QUEST_STORAGE_KEY, LOCAL_MEMO_STORAGE_KEY } from '@/lib/constants';
 import { getLocalDateString, getRelativeDateString } from '@/lib/dateUtils';
 import type { DailyQuest } from '@/lib/dailyQuests';
 
@@ -29,6 +29,26 @@ describe('DailyQuestPanel', () => {
     expect(screen.getByText('Daily Quest')).toBeInTheDocument();
     expect(screen.getByText('Hydration routine')).toBeInTheDocument();
     expect(screen.getByText('0/1 Clear')).toBeInTheDocument();
+  });
+
+  it('does not read today TODO memos into daily quests', () => {
+    localStorage.setItem(LOCAL_MEMO_STORAGE_KEY, JSON.stringify([
+      {
+        id: 'todo-1',
+        content: 'Today TODO should stay in Quest Log',
+        category: 'TODO',
+        priority: 'Medium',
+        tags: [],
+        createdAt: Date.now(),
+        targetDate: getLocalDateString(),
+        completed: false,
+      },
+    ]));
+
+    render(<DailyQuestPanel />);
+
+    expect(screen.queryByText('Today TODO should stay in Quest Log')).not.toBeInTheDocument();
+    expect(screen.getByText('No daily quests assigned')).toBeInTheDocument();
   });
 
   it('adds and toggles a separate daily quest', () => {
