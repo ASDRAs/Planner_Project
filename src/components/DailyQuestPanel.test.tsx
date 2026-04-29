@@ -51,13 +51,25 @@ describe('DailyQuestPanel', () => {
     expect(screen.getByText('No daily quests assigned')).toBeInTheDocument();
   });
 
+  it('keeps the add form hidden until the add button is opened', () => {
+    render(<DailyQuestPanel />);
+
+    expect(screen.queryByLabelText('New daily quest')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open daily quest add form' }));
+
+    expect(screen.getByLabelText('New daily quest')).toBeInTheDocument();
+  });
+
   it('adds and toggles a separate daily quest', () => {
     render(<DailyQuestPanel />);
 
+    fireEvent.click(screen.getByRole('button', { name: 'Open daily quest add form' }));
     fireEvent.change(screen.getByLabelText('New daily quest'), { target: { value: 'Read design notes' } });
     fireEvent.click(screen.getByRole('button', { name: 'Add daily quest' }));
 
     expect(screen.getByText('Read design notes')).toBeInTheDocument();
+    expect(screen.queryByLabelText('New daily quest')).not.toBeInTheDocument();
     expect(screen.getByText('0/1 Clear')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Toggle Read design notes' }));

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
+import React, { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   addDailyQuest,
   deleteDailyQuest,
@@ -14,12 +14,20 @@ import { getLocalDateString } from '@/lib/dateUtils';
 export default function DailyQuestPanel() {
   const [quests, setQuests] = useState<DailyQuest[]>([]);
   const [draftTitle, setDraftTitle] = useState('');
+  const [isComposerOpen, setIsComposerOpen] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
   const today = getLocalDateString();
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setQuests(getDailyQuests());
   }, []);
+
+  useEffect(() => {
+    if (isComposerOpen) {
+      inputRef.current?.focus();
+    }
+  }, [isComposerOpen]);
 
   const completedCount = useMemo(
     () => quests.filter((quest) => isDailyQuestCompleted(quest, today)).length,
@@ -30,9 +38,13 @@ export default function DailyQuestPanel() {
 
   const handleAdd = useCallback((event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    const cleanTitle = draftTitle.trim();
     const nextQuests = addDailyQuest(draftTitle);
     setQuests(nextQuests);
-    if (draftTitle.trim()) setDraftTitle('');
+    if (cleanTitle) {
+      setDraftTitle('');
+      setIsComposerOpen(false);
+    }
   }, [draftTitle]);
 
   const handleToggle = useCallback((id: string) => {
@@ -66,7 +78,51 @@ export default function DailyQuestPanel() {
           </div>
         </div>
 
-        <div className="flex shrink-0 items-end gap-4">
+        <div className="relative flex shrink-0 items-end gap-3">
+          <button
+            type="button"
+            aria-label={isComposerOpen ? 'Close daily quest add form' : 'Open daily quest add form'}
+            aria-expanded={isComposerOpen}
+            title="Add daily quest"
+            onClick={() => setIsComposerOpen((open) => !open)}
+            className={`mb-0.5 flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border text-sm transition-all ${
+              isComposerOpen
+                ? 'border-[var(--eva-green)] bg-[var(--eva-green)] text-black shadow-[0_0_18px_rgba(74,222,128,0.25)]'
+                : 'border-[var(--eva-green)]/30 bg-[var(--eva-green)]/15 text-[var(--eva-green)] hover:bg-[var(--eva-green)] hover:text-black'
+            }`}
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M12 5v14" />
+              <path d="M5 12h14" />
+            </svg>
+          </button>
+
+          {isComposerOpen && (
+            <form
+              onSubmit={handleAdd}
+              className="absolute right-0 top-[calc(100%+0.75rem)] z-30 flex w-[min(18rem,calc(100vw-2rem))] gap-2 rounded-2xl border border-[var(--eva-purple)]/25 bg-[var(--bg-primary)]/95 p-2 shadow-[0_18px_45px_rgba(0,0,0,0.28)] backdrop-blur-xl"
+            >
+              <input
+                ref={inputRef}
+                aria-label="New daily quest"
+                value={draftTitle}
+                onChange={(event) => setDraftTitle(event.target.value)}
+                className="min-w-0 flex-1 rounded-xl border border-[var(--eva-purple)]/20 bg-black/[0.03] px-3 py-2 text-sm font-bold text-[var(--text-primary)] outline-none transition-all placeholder:text-[var(--text-primary)]/25 focus:border-[var(--eva-purple)]/60 dark:bg-white/[0.04]"
+                placeholder="New daily quest"
+              />
+              <button
+                type="submit"
+                aria-label="Add daily quest"
+                title="Confirm"
+                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-[var(--eva-green)]/30 bg-[var(--eva-green)]/15 text-[var(--eva-green)] transition-all hover:bg-[var(--eva-green)] hover:text-black"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M20 6 9 17l-5-5" />
+                </svg>
+              </button>
+            </form>
+          )}
+
           <div className="text-right">
             <div className="text-[clamp(1.75rem,3vw,2.5rem)] font-black italic leading-none text-[var(--eva-purple)]">
               {progress}%
@@ -80,26 +136,6 @@ export default function DailyQuestPanel() {
           )}
         </div>
       </div>
-
-      <form onSubmit={handleAdd} className="mt-5 flex gap-2">
-        <input
-          aria-label="New daily quest"
-          value={draftTitle}
-          onChange={(event) => setDraftTitle(event.target.value)}
-          className="min-w-0 flex-1 rounded-xl border border-[var(--eva-purple)]/20 bg-black/[0.03] px-4 py-2.5 text-sm font-bold text-[var(--text-primary)] outline-none transition-all placeholder:text-[var(--text-primary)]/25 focus:border-[var(--eva-purple)]/60 dark:bg-white/[0.04]"
-          placeholder="New daily quest"
-        />
-        <button
-          type="submit"
-          aria-label="Add daily quest"
-          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-[var(--eva-green)]/30 bg-[var(--eva-green)]/15 text-[var(--eva-green)] transition-all hover:bg-[var(--eva-green)] hover:text-black"
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M12 5v14" />
-            <path d="M5 12h14" />
-          </svg>
-        </button>
-      </form>
 
       <div className="mt-5 grid grid-cols-1 gap-2 md:grid-cols-2">
         {quests.length === 0 ? (
