@@ -181,6 +181,15 @@ export default function DataSync({
   ]);
 
   useEffect(() => {
+    const handleWindowFocus = () => {
+      void refreshGmailStatus();
+    };
+
+    window.addEventListener('focus', handleWindowFocus);
+    return () => window.removeEventListener('focus', handleWindowFocus);
+  }, [refreshGmailStatus]);
+
+  useEffect(() => {
     const handleClickOutside = (event: PointerEvent) => {
       if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
         setIsOpen(false);
@@ -397,6 +406,10 @@ export default function DataSync({
             isOpen ? 'opacity-45' : 'opacity-80'
           }`}
         />
+
+        {gmailStatus.activeHasNewMail && (
+          <span className="pointer-events-none absolute right-1.5 top-1.5 z-30 block h-3 w-3 rounded-full border-2 border-[var(--bg-main)] bg-rose-500 shadow-[0_0_12px_rgba(244,63,94,0.9)]" />
+        )}
 
         <button
           onClick={() => setIsOpen(!isOpen)}

@@ -9,6 +9,16 @@ export interface LLMClassifyResult {
   cleanContent: string;
 }
 
+export interface LLMClassifyRequest {
+  input: string;
+  today: string;
+  dayOfWeek: string;
+  context?: {
+    forcedCategory?: string;
+    forcedFolder?: string;
+  };
+}
+
 const MODEL_CANDIDATES = ['gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-pro'] as const;
 const CATEGORY_VALUES: Category[] = ['STUDY', 'GAME_DESIGN', 'VAULT', 'THOUGHT', 'TODO'];
 const PRIORITY_VALUES: Priority[] = ['High', 'Medium', 'Low'];
@@ -29,15 +39,59 @@ function toStringArray(value: unknown): string[] {
     .filter(Boolean);
 }
 
+function normalizeLLMResult(parsed: Partial<LLMClassifyResult>, fallbackInput: string): LLMClassifyResult {
+  return {
+    category: toCategory(parsed.category, 'THOUGHT'),
+    priority: toPriority(parsed.priority, 'Medium'),
+    tags: toStringArray(parsed.tags),
+    folder: typeof parsed.folder === 'string' && parsed.folder.trim() ? parsed.folder.trim() : undefined,
+    subTasks: toStringArray(parsed.subTasks),
+    cleanContent:
+      typeof parsed.cleanContent === 'string' && parsed.cleanContent.trim()
+        ? parsed.cleanContent.trim()
+        : fallbackInput,
+  };
+}
+
+async function classifyViaAppRoute(request: LLMClassifyRequest): Promise<LLMClassifyResult> {
+  const response = await fetch('/api/classify', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(request),
+  });
+
+  if (!response.ok) {
+    throw new Error('LLM classification request failed');
+  }
+
+  const payload = (await response.json()) as Partial<LLMClassifyResult>;
+  return normalizeLLMResult(payload, request.input);
+}
+
 export async function classifyWithLLM(
   input: string,
   today: string,
   dayOfWeek: string,
   context?: { forcedCategory?: string; forcedFolder?: string }
 ): Promise<LLMClassifyResult> {
-  const apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY;
+  const request: LLMClassifyRequest = { input, today, dayOfWeek, context };
+
+  if (typeof window !== 'undefined') {
+    return classifyViaAppRoute(request);
+  }
+
+  return classifyWithGemini(request);
+}
+
+export async function classifyWithGemini({
+  input,
+  today,
+  dayOfWeek,
+  context,
+}: LLMClassifyRequest): Promise<LLMClassifyResult> {
+  const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
-    throw new Error('NEXT_PUBLIC_GEMINI_API_KEY is not set');
+    throw new Error('GEMINI_API_KEY is not set');
   }
 
   const forcedCategory = context?.forcedCategory ? `Forced category: ${context.forcedCategory}.` : '';
@@ -86,19 +140,7 @@ export async function classifyWithLLM(
         continue;
       }
 
-      const parsed = JSON.parse(rawText) as Partial<LLMClassifyResult>;
-
-      return {
-        category: toCategory(parsed.category, 'THOUGHT'),
-        priority: toPriority(parsed.priority, 'Medium'),
-        tags: toStringArray(parsed.tags),
-        folder: typeof parsed.folder === 'string' && parsed.folder.trim() ? parsed.folder.trim() : undefined,
-        subTasks: toStringArray(parsed.subTasks),
-        cleanContent:
-          typeof parsed.cleanContent === 'string' && parsed.cleanContent.trim()
-            ? parsed.cleanContent.trim()
-            : input,
-      };
+      return normalizeLLMResult(JSON.parse(rawText) as Partial<LLMClassifyResult>, input);
     } catch (error) {
       console.warn(`LLM call failed on ${model}`, error);
     }

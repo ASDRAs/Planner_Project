@@ -12,10 +12,15 @@ function extractUrl(url: unknown): string {
 const fetchMock = vi.fn((url: Parameters<typeof fetch>[0]) => {
   const normalizedUrl = extractUrl(url);
 
-  if (
-    normalizedUrl.includes('/api/classify') ||
-    normalizedUrl.includes('generativelanguage.googleapis.com')
-  ) {
+  if (normalizedUrl.includes('/api/classify')) {
+    return Promise.resolve({
+      ok: false,
+      status: 502,
+      json: () => Promise.resolve({ error: 'Classification failed.' }),
+    });
+  }
+
+  if (normalizedUrl.includes('generativelanguage.googleapis.com')) {
     return Promise.resolve({
       ok: true,
       json: () =>
