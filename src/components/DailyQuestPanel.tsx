@@ -3,6 +3,7 @@
 import React, { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   addDailyQuest,
+  DAILY_QUESTS_UPDATED_EVENT,
   deleteDailyQuest,
   getDailyQuests,
   isDailyQuestCompleted,
@@ -11,7 +12,11 @@ import {
 } from '@/lib/dailyQuests';
 import { getLocalDateString } from '@/lib/dateUtils';
 
-export default function DailyQuestPanel() {
+interface DailyQuestPanelProps {
+  userId?: string;
+}
+
+export default function DailyQuestPanel({ userId }: DailyQuestPanelProps) {
   const [quests, setQuests] = useState<DailyQuest[]>([]);
   const [draftTitle, setDraftTitle] = useState('');
   const [isComposerOpen, setIsComposerOpen] = useState(false);
@@ -21,6 +26,15 @@ export default function DailyQuestPanel() {
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setQuests(getDailyQuests());
+  }, []);
+
+  useEffect(() => {
+    const handleDailyQuestsUpdated = () => {
+      setQuests(getDailyQuests());
+    };
+
+    window.addEventListener(DAILY_QUESTS_UPDATED_EVENT, handleDailyQuestsUpdated);
+    return () => window.removeEventListener(DAILY_QUESTS_UPDATED_EVENT, handleDailyQuestsUpdated);
   }, []);
 
   useEffect(() => {
@@ -39,21 +53,21 @@ export default function DailyQuestPanel() {
   const handleAdd = useCallback((event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const cleanTitle = draftTitle.trim();
-    const nextQuests = addDailyQuest(draftTitle);
+    const nextQuests = addDailyQuest(draftTitle, userId);
     setQuests(nextQuests);
     if (cleanTitle) {
       setDraftTitle('');
       setIsComposerOpen(false);
     }
-  }, [draftTitle]);
+  }, [draftTitle, userId]);
 
   const handleToggle = useCallback((id: string) => {
-    setQuests(toggleDailyQuest(id, today));
-  }, [today]);
+    setQuests(toggleDailyQuest(id, today, userId));
+  }, [today, userId]);
 
   const handleDelete = useCallback((id: string) => {
-    setQuests(deleteDailyQuest(id));
-  }, []);
+    setQuests(deleteDailyQuest(id, userId));
+  }, [userId]);
 
   return (
     <section className="mb-[clamp(1.5rem,4vh,2.5rem)] border-y border-[var(--eva-purple)]/15 bg-[var(--eva-purple)]/[0.03] px-[clamp(0.75rem,2vw,1.25rem)] py-[clamp(1rem,2.5vw,1.5rem)]">

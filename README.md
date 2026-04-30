@@ -55,6 +55,7 @@ GOOGLE_GMAIL_REDIRECT_URI=http://localhost:3000/api/gmail/callback
 
 Supabase can also be configured at runtime from the app UI.
 For Gmail integration, enable the Gmail API in Google Cloud and add the callback URL to your OAuth client's authorized redirect URIs.
+For sync conflict resolution and daily quest cloud sync, run `supabase/sync-schema.sql` once in the Supabase SQL editor.
 
 ## Scripts
 

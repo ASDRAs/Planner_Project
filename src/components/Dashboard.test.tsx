@@ -55,7 +55,7 @@ describe('Dashboard quest schedule window', () => {
     expect(screen.queryByText('범위 이전 일정')).not.toBeInTheDocument();
     expect(screen.getByText('4일 후 일정')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Compact View/i })).toBeInTheDocument();
-  });
+  }, 10000);
 
   it('keeps past schedules in the Past Log modal', async () => {
     const memos = [

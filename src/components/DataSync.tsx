@@ -3,6 +3,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { exportMemosToJson, importMemosFromJson, syncMemos } from '@/lib/storage';
+import { notifyDailyQuestsUpdated, syncDailyQuests } from '@/lib/dailyQuests';
 import { getLocalDateString } from '@/lib/dateUtils';
 import {
   acknowledgeActiveGmailAccount,
@@ -84,9 +85,13 @@ export default function DataSync({
     setSyncStatus('syncing');
 
     try {
-      const result = await syncMemos(userId);
-      if (result.ok) {
+      const [memoResult, dailyQuestResult] = await Promise.all([
+        syncMemos(userId),
+        syncDailyQuests(userId),
+      ]);
+      if (memoResult.ok && dailyQuestResult.ok) {
         setSyncStatus('ready');
+        notifyDailyQuestsUpdated();
         onSyncCompleteRef.current();
       } else {
         setSyncStatus('error');
