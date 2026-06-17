@@ -78,4 +78,26 @@ describe('Dashboard quest schedule window', () => {
 
     expect(await screen.findByText('범위 이전 일정')).toBeInTheDocument();
   });
+
+  it('keeps row edit and delete controls visible on mobile and reveals them only from the control cluster on desktop', () => {
+    render(
+      <Dashboard
+        memos={[createMemo('today', '오늘 일정', 0)]}
+        onToggle={vi.fn()}
+        onDelete={vi.fn()}
+        onRefresh={vi.fn()}
+      />
+    );
+
+    const editButton = screen.getByRole('button', { name: 'Edit' });
+    const deleteButton = screen.getByRole('button', { name: 'Delete' });
+    const controls = editButton.parentElement;
+
+    expect(deleteButton.parentElement).toBe(controls);
+    expect(controls).toHaveClass('opacity-100');
+    expect(controls).toHaveClass('md:opacity-0');
+    expect(controls).toHaveClass('md:hover:opacity-100');
+    expect(controls).toHaveClass('md:focus-within:opacity-100');
+    expect(controls?.className).not.toContain('group-hover');
+  });
 });

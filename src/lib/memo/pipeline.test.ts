@@ -31,4 +31,22 @@ describe('Memo Pipeline Integration', () => {
     expect(result.category).toBe('TODO');
     expect(result.cleanContent).toBe('세탁기 돌리기');
   });
+
+  it('should not force broad "게임개발자" wording into GAME_DESIGN', async () => {
+    const result = await processMemo('게임개발자 공부');
+    expect(result.category).toBe('STUDY');
+    expect(result.tags).not.toContain('게임기획');
+  });
+
+  it('should classify dated game developer actions as TODO', async () => {
+    const result = await processMemo('10.20. 게임개발자 포트폴리오 제출');
+    expect(result.category).toBe('TODO');
+    expect(result.targetDates).toContainEqual(expect.stringContaining('-10-20'));
+    expect(result.cleanContent).toBe('게임개발자 포트폴리오 제출');
+  });
+
+  it('should allow game developer reflection to remain THOUGHT', async () => {
+    const result = await processMemo('게임개발자라는 직업에 대한 생각');
+    expect(result.category).toBe('THOUGHT');
+  });
 });

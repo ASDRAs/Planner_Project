@@ -460,19 +460,6 @@ export default function DataSync({
                 />
               </>
             )}
-
-            {!isOpen && syncStatus !== 'syncing' && (
-              <circle
-                cx="12"
-                cy="12"
-                r="3"
-                className={`${
-                  syncStatus === 'error'
-                    ? 'fill-rose-500/30 stroke-rose-500'
-                    : 'fill-[var(--eva-green)]/30 stroke-[var(--eva-green)]'
-                } animate-pulse`}
-              />
-            )}
           </svg>
         </button>
       </div>

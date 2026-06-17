@@ -23,6 +23,10 @@ const MODEL_CANDIDATES = ['gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-pro'] 
 const CATEGORY_VALUES: Category[] = ['STUDY', 'GAME_DESIGN', 'VAULT', 'THOUGHT', 'TODO'];
 const PRIORITY_VALUES: Priority[] = ['High', 'Medium', 'Low'];
 
+export function isLLMClassifierConfigured(): boolean {
+  return Boolean(process.env.NEXT_PUBLIC_GEMINI_API_KEY);
+}
+
 function toCategory(value: unknown, fallback: Category): Category {
   return CATEGORY_VALUES.includes(value as Category) ? (value as Category) : fallback;
 }
@@ -72,7 +76,7 @@ export async function classifyWithLLM(
   input: string,
   today: string,
   dayOfWeek: string,
-  context?: { forcedCategory?: string; forcedFolder?: string }
+  context?: { forcedCategory?: Category; forcedFolder?: string }
 ): Promise<LLMClassifyResult> {
   const request: LLMClassifyRequest = { input, today, dayOfWeek, context };
 
@@ -105,6 +109,9 @@ export async function classifyWithGemini({
     'priority must be one of High, Medium, Low.',
     'tags and subTasks must be string arrays.',
     'cleanContent must remove date/time words from the original sentence.',
+    'Do not classify as GAME_DESIGN from broad words like game, 게임, 게임개발자, developer, 개발자 alone.',
+    'Use GAME_DESIGN only for game design mechanics, player behavior, game systems, balance, reward loops, difficulty, tutorials, or design notes.',
+    'If the memo is a dated/actionable task, prefer TODO. If it is learning/reviewing, prefer STUDY. If it is reflection or an idea, prefer THOUGHT.',
     forcedCategory,
     forcedFolder,
   ]

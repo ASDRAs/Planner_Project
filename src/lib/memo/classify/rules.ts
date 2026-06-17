@@ -42,8 +42,13 @@ export function classifyByRules(input: string, hasDate: boolean, folder?: string
   const isStudy = /공부|이론|정리|복습|학습|과목|교수|과제|시험|고사|출석|특강|강연|연습문제|알고리즘|운영체제|네트워크|데이터베이스|컴파일러|자료구조|컴퓨터구조/.test(normalized) || 
                   normalized.includes('stp') || normalized.includes('utp');
 
-  // GAME_DESIGN Signals
-  const isGameDesign = /player behavior|game design|기획|성취형|레벨 상승|설계|게임|플레이어|재미|난이도|루프|보상|도전|메커닉|튜토리얼|achievers/.test(normalized);
+  // GAME_DESIGN signals must describe design/player/system concepts.
+  // Broad nouns like "게임" or "게임개발자" are intentionally not enough on their own.
+  const hasExplicitGameDesignSignal =
+    /player behavior|game design|achievers|성취형|플레이어|레벨 상승|재미|난이도|루프|보상|도전|메커닉|튜토리얼/.test(normalized);
+  const hasGameDesignPhrase =
+    /게임\s*(기획|설계|디자인|시스템|경제|밸런스|루프)|게임의\s*(재미|난이도|보상|도전|메커닉)|플레이어\s*(행동|유형|경험|선택)/.test(normalized);
+  const isGameDesign = hasExplicitGameDesignSignal || hasGameDesignPhrase;
 
   // VAULT Signals
   const isVault = /명령어|config|\.msc|\.cpl|비밀번호|계좌|보험|계약|주소|기록|보관|services\.msc|제어판|작업 관리자|레지스트리|ipconfig|netstat|ping|systeminfo|dxdiag|cmd|control|taskmgr|regedit/.test(normalized);

@@ -15,6 +15,34 @@ export function parseDateExpressions(input: string, context: ParseContext): Date
     return `${y}-${m}-${day}`;
   };
 
+  const addMonthDay = (monthText: string, dayText: string, matchedText: string) => {
+    const month = Number.parseInt(monthText, 10);
+    const day = Number.parseInt(dayText, 10);
+    if (!Number.isInteger(month) || !Number.isInteger(day)) return false;
+
+    const candidate = new Date(year, month - 1, day);
+    const isValid =
+      candidate.getFullYear() === year &&
+      candidate.getMonth() === month - 1 &&
+      candidate.getDate() === day;
+
+    if (!isValid) return false;
+
+    targetDates.push(formatDate(candidate));
+    matchedPatterns.push(matchedText.trim());
+    return true;
+  };
+
+  const removeMatchedDate = (
+    fullMatch: string,
+    prefix: string,
+    monthText: string,
+    dayText: string
+  ) => {
+    const matchedText = fullMatch.slice(prefix.length);
+    return addMonthDay(monthText, dayText, matchedText) ? prefix : fullMatch;
+  };
+
   // 1. Relative Dates (오늘, 내일, 모레)
   const relativePatterns: Record<string, number> = {
     '오늘': 0,
@@ -58,30 +86,37 @@ export function parseDateExpressions(input: string, context: ParseContext): Date
     cleanedText = cleanedText.replace(full, '').trim();
   }
 
-  // 3. Absolute dates (MM/DD, M월 D일)
-  // 6월 15일, 6월 15, 4/17
-  const absRegex = /(?:\s|^)(\d{1,2})(월|\/)\s*(\d{1,2})(일)?(?:\s|$)/g;
-  while ((match = absRegex.exec(cleanedText)) !== null) {
-    const [full, mStr, , dStr] = match;
-    const m = parseInt(mStr);
-    const d = parseInt(dStr);
+  // 3. Absolute dates (MM/DD, M월 D일, M.D.)
+  // 6월 15일, 6월 15, 4/17, 10.20.
+  const absRegex = /(^|[\s([{:,])(\d{1,2})\s*(월|\/)\s*(\d{1,2})(?:\s*일)?(?=$|[\s)\]}.,:!?])/g;
+  cleanedText = cleanedText.replace(absRegex, (full, prefix, monthText, _separator, dayText) =>
+    removeMatchedDate(full, prefix, monthText, dayText)
+  );
 
-    if (m >= 1 && m <= 12 && d >= 1 && d <= 31) {
-      const targetDate = `${year}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-      targetDates.push(targetDate);
-      matchedPatterns.push(full.trim());
-      cleanedText = cleanedText.replace(full.trim(), '').trim();
-    }
-  }
+  // Dot shorthand requires a trailing dot so IPs/versions like 8.8.8.8 or v1.2.3 are not treated as dates.
+  const dottedAbsRegex = /(^|[\s([{:,])(\d{1,2})\s*\.\s*(\d{1,2})\.(?=$|[^\d.])/g;
+  cleanedText = cleanedText.replace(dottedAbsRegex, (full, prefix, monthText, dayText) =>
+    removeMatchedDate(full, prefix, monthText, dayText)
+  );
 
   // 4. ISO-ish dates (YYYY-MM-DD)
-  const isoRegex = /(?:\s|^)(\d{4})-(\d{2})-(\d{2})(?:\s|$)/g;
-  while ((match = isoRegex.exec(cleanedText)) !== null) {
-    const [full, y, m, d] = match;
+  const isoRegex = /(^|[\s([{:,])(\d{4})-(\d{2})-(\d{2})(?=$|[\s)\]}.,:!?])/g;
+  cleanedText = cleanedText.replace(isoRegex, (full, prefix, y, m, d) => {
+    const yearNumber = Number.parseInt(y, 10);
+    const monthNumber = Number.parseInt(m, 10);
+    const dayNumber = Number.parseInt(d, 10);
+    const candidate = new Date(yearNumber, monthNumber - 1, dayNumber);
+    const isValid =
+      candidate.getFullYear() === yearNumber &&
+      candidate.getMonth() === monthNumber - 1 &&
+      candidate.getDate() === dayNumber;
+
+    if (!isValid) return full;
+
     targetDates.push(`${y}-${m}-${d}`);
-    matchedPatterns.push(full.trim());
-    cleanedText = cleanedText.replace(full.trim(), '').trim();
-  }
+    matchedPatterns.push(full.slice(prefix.length).trim());
+    return prefix;
+  });
 
   // Fallback to today if no date found
   if (targetDates.length === 0) {

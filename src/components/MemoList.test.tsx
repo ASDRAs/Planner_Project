@@ -47,6 +47,21 @@ describe('MemoList Component', () => {
     expect(onDelete).toHaveBeenCalledWith('1');
   });
 
+  it('모바일에서 편집 및 삭제 버튼을 기본 노출하고 데스크톱에서는 버튼 영역 hover에만 반응해야 함', () => {
+    render(<MemoList memos={mockMemos} onDelete={vi.fn()} onRefresh={vi.fn()} />);
+
+    const editButton = screen.getByRole('button', { name: 'Edit' });
+    const deleteButton = screen.getByRole('button', { name: 'Delete' });
+    const controls = editButton.parentElement;
+
+    expect(deleteButton.parentElement).toBe(controls);
+    expect(controls).toHaveClass('opacity-100');
+    expect(controls).toHaveClass('md:opacity-0');
+    expect(controls).toHaveClass('md:hover:opacity-100');
+    expect(controls).toHaveClass('md:focus-within:opacity-100');
+    expect(controls?.className).not.toContain('group-hover');
+  });
+
   it('카테고리 필터가 작동해야 함', () => {
     render(<MemoList memos={mockMemos} onDelete={vi.fn()} onRefresh={vi.fn()} />);
     

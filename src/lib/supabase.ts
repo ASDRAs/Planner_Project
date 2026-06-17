@@ -23,7 +23,9 @@ const supabaseAnonKey = envSupabaseAnonKey || runtimeConfig.anonKey || 'placehol
 export const isSupabaseConfigured =
   !!(envSupabaseUrl && envSupabaseAnonKey) || !!(runtimeConfig.url && runtimeConfig.anonKey);
 
-if (!isSupabaseConfigured) {
+const isTestRuntime = process.env.NODE_ENV === 'test' || process.env.VITEST === 'true';
+
+if (!isSupabaseConfigured && !isTestRuntime) {
   console.warn(
     'WARNING: Supabase environment variables/runtime config are missing. Auth features will not work.'
   );

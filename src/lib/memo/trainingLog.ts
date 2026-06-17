@@ -1,4 +1,4 @@
-import { supabase } from '../supabase';
+import { isSupabaseConfigured, supabase } from '../supabase';
 import { ClassificationResult } from './types';
 import { Memo } from '../storage';
 
@@ -25,6 +25,7 @@ export interface TrainingLogEntry {
 
 export async function saveTrainingLog(predicted: ClassificationResult, finalMemo: Memo, userId?: string): Promise<void> {
   if (typeof window === 'undefined') return;
+  if (!isSupabaseConfigured) return;
 
   const diffFlags = {
     categoryChanged: predicted.category !== finalMemo.category,
@@ -50,11 +51,15 @@ export async function saveTrainingLog(predicted: ClassificationResult, finalMemo
   try {
     // Fire and forget
     // Assuming a 'training_logs' table exists in Supabase
-    supabase.from('training_logs').insert([logEntry]).then(({ error }) => {
-      if (error) {
-        console.warn("[TrainingLog] Server log insertion failed:", error.message);
-      }
-    });
+    void Promise.resolve(supabase.from('training_logs').insert([logEntry]))
+      .then(({ error }) => {
+        if (error) {
+          console.warn("[TrainingLog] Server log insertion failed:", error.message);
+        }
+      })
+      .catch((error: unknown) => {
+        console.warn("[TrainingLog] Server log insertion failed:", error);
+      });
   } catch (e) {
     console.warn("Failed to save training log", e);
   }

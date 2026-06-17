@@ -56,6 +56,124 @@ const EXTERNAL_OPEN_BRIDGE_SCRIPT: &str = r#"
 })();
 "#;
 
+const FLOATING_RESET_BUTTON_SCRIPT: &str = r#"
+(() => {
+  if (window.__plannerFloatingResetButtonInstalled) {
+    return;
+  }
+  window.__plannerFloatingResetButtonInstalled = true;
+
+  const install = () => {
+    const invoke = window.__TAURI_INTERNALS__?.invoke;
+    if (typeof invoke !== 'function') {
+      window.requestAnimationFrame(install);
+      return;
+    }
+
+    if (!document.body) {
+      window.requestAnimationFrame(install);
+      return;
+    }
+
+    if (document.getElementById('planner-floating-reset-button')) {
+      return;
+    }
+
+    const button = document.createElement('button');
+    button.id = 'planner-floating-reset-button';
+    button.type = 'button';
+    button.title = 'Reset floating position';
+    button.setAttribute('aria-label', 'Reset floating window position');
+    button.innerHTML = `
+      <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M3 9V3h6"></path>
+        <path d="M21 15v6h-6"></path>
+        <path d="M3 3l7 7"></path>
+        <path d="M21 21l-7-7"></path>
+      </svg>
+    `;
+
+    Object.assign(button.style, {
+      alignItems: 'center',
+      backdropFilter: 'blur(14px)',
+      background: 'rgba(13, 11, 20, 0.88)',
+      border: '1px solid rgba(167, 139, 250, 0.34)',
+      borderRadius: '9999px',
+      boxShadow: '0 8px 24px rgba(0, 0, 0, 0.24)',
+      color: '#d8d3ff',
+      cursor: 'pointer',
+      display: 'flex',
+      height: '32px',
+      justifyContent: 'center',
+      padding: '0',
+      position: 'fixed',
+      right: '8px',
+      top: '8px',
+      transition: 'border-color 140ms ease, color 140ms ease, opacity 140ms ease, transform 140ms ease',
+      width: '32px',
+      zIndex: '2147483647',
+    });
+
+    let stateTimer = 0;
+    const setState = (state) => {
+      window.clearTimeout(stateTimer);
+      button.disabled = state === 'pending';
+      button.style.cursor = state === 'pending' ? 'wait' : 'pointer';
+      button.style.opacity = state === 'pending' ? '0.7' : '1';
+      button.style.transform = state === 'pending' ? 'scale(0.96)' : 'scale(1)';
+
+      if (state === 'done') {
+        button.style.borderColor = '#7bf1a8';
+        button.style.color = '#7bf1a8';
+      } else if (state === 'error') {
+        button.style.borderColor = '#fb7185';
+        button.style.color = '#fb7185';
+      } else {
+        button.style.borderColor = 'rgba(167, 139, 250, 0.34)';
+        button.style.color = '#d8d3ff';
+      }
+
+      if (state === 'done' || state === 'error') {
+        stateTimer = window.setTimeout(() => setState('idle'), 1400);
+      }
+    };
+
+    button.addEventListener('mouseenter', () => {
+      if (!button.disabled) {
+        button.style.borderColor = 'rgba(167, 139, 250, 0.72)';
+        button.style.transform = 'scale(1.05)';
+      }
+    });
+    button.addEventListener('mouseleave', () => {
+      if (!button.disabled) {
+        setState('idle');
+      }
+    });
+    button.addEventListener('click', async (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+
+      if (button.disabled) {
+        return;
+      }
+
+      setState('pending');
+      try {
+        await invoke('reset_floating_window_position');
+        setState('done');
+      } catch (error) {
+        console.error('[FloatingWindow] Position reset failed:', error);
+        setState('error');
+      }
+    });
+
+    document.body.append(button);
+  };
+
+  install();
+})();
+"#;
+
 #[tauri::command]
 fn open_external_url(url: String) -> Result<(), String> {
     let parsed = tauri::Url::parse(&url).map_err(|error| format!("invalid url: {error}"))?;
@@ -66,6 +184,24 @@ fn open_external_url(url: String) -> Result<(), String> {
 
     open::that_detached(parsed.as_str())
         .map_err(|error| format!("failed to open external url: {error}"))
+}
+
+#[tauri::command]
+fn reset_floating_window_position(app: tauri::AppHandle) -> Result<(), String> {
+    #[cfg(target_os = "windows")]
+    {
+        let window = app
+            .get_webview_window("main")
+            .ok_or_else(|| "main window was not found".to_string())?;
+
+        configure_interactive_wallpaper_window(&window)
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        let _ = app;
+        Ok(())
+    }
 }
 
 fn navigate_main_window_to_remote(window: &tauri::WebviewWindow) {
@@ -84,6 +220,12 @@ fn navigate_main_window_to_remote(window: &tauri::WebviewWindow) {
 fn install_external_open_bridge<R: tauri::Runtime>(webview: &tauri::Webview<R>) {
     if let Err(error) = webview.eval(EXTERNAL_OPEN_BRIDGE_SCRIPT) {
         eprintln!("external open bridge injection failed: {error}");
+    }
+}
+
+fn install_floating_reset_button<R: tauri::Runtime>(webview: &tauri::Webview<R>) {
+    if let Err(error) = webview.eval(FLOATING_RESET_BUTTON_SCRIPT) {
+        eprintln!("floating reset button injection failed: {error}");
     }
 }
 
@@ -209,27 +351,119 @@ fn wait_for_target_desktop_rect(window: &tauri::WebviewWindow) -> tauri::Result<
 }
 
 #[cfg(target_os = "windows")]
-fn configure_interactive_wallpaper_window(window: &tauri::WebviewWindow) -> tauri::Result<()> {
+fn align_window_client_to_desktop_rect(
+    window: &tauri::WebviewWindow,
+    rect: DesktopRect,
+) -> Result<(), String> {
+    use windows::Win32::{
+        Foundation::{POINT, RECT},
+        Graphics::Gdi::ClientToScreen,
+        UI::WindowsAndMessaging::{
+            GetClientRect, GetWindowRect, SetWindowPos, SWP_NOACTIVATE, SWP_NOZORDER,
+            SWP_SHOWWINDOW,
+        },
+    };
+
+    let hwnd = window
+        .hwnd()
+        .map_err(|error| format!("failed to get window handle: {error}"))?;
+
+    let mut window_rect = RECT::default();
+    let mut client_rect = RECT::default();
+    let mut client_origin = POINT { x: 0, y: 0 };
+
+    unsafe {
+        GetWindowRect(hwnd, &mut window_rect)
+            .map_err(|error| format!("failed to read window rect: {error}"))?;
+        GetClientRect(hwnd, &mut client_rect)
+            .map_err(|error| format!("failed to read client rect: {error}"))?;
+        if !ClientToScreen(hwnd, &mut client_origin).as_bool() {
+            return Err(format!(
+                "failed to map client rect: {}",
+                windows::core::Error::from_win32()
+            ));
+        }
+    }
+
+    let left_inset = client_origin.x - window_rect.left;
+    let top_inset = client_origin.y - window_rect.top;
+    let right_inset = window_rect.right - (client_origin.x + client_rect.right);
+    let bottom_inset = window_rect.bottom - (client_origin.y + client_rect.bottom);
+    let outer_x = rect.x - left_inset;
+    let outer_y = rect.y - top_inset;
+    let outer_width = (rect.width + left_inset + right_inset).max(1);
+    let outer_height = (rect.height + top_inset + bottom_inset).max(1);
+
+    unsafe {
+        SetWindowPos(
+            hwnd,
+            None,
+            outer_x,
+            outer_y,
+            outer_width,
+            outer_height,
+            SWP_NOZORDER | SWP_NOACTIVATE | SWP_SHOWWINDOW,
+        )
+        .map_err(|error| format!("failed to align window with Win32: {error}"))?;
+    }
+
+    Ok(())
+}
+
+#[cfg(target_os = "windows")]
+fn apply_desktop_rect_to_window(
+    window: &tauri::WebviewWindow,
+    rect: DesktopRect,
+) -> Result<(), String> {
     use tauri::{PhysicalPosition, PhysicalSize, Position, Size};
 
-    let rect = wait_for_target_desktop_rect(window)?;
+    window
+        .set_size(Size::Physical(PhysicalSize::new(
+            rect.width as u32,
+            rect.height as u32,
+        )))
+        .map_err(|error| format!("failed to resize window: {error}"))?;
+
+    if let Err(error) = align_window_client_to_desktop_rect(window, rect) {
+        eprintln!("native window alignment failed: {error}");
+        window
+            .set_position(Position::Physical(PhysicalPosition::new(rect.x, rect.y)))
+            .map_err(|error| format!("failed to position window: {error}"))?;
+    }
+
+    Ok(())
+}
+
+#[cfg(target_os = "windows")]
+fn configure_interactive_wallpaper_window(window: &tauri::WebviewWindow) -> Result<(), String> {
+    let rect = wait_for_target_desktop_rect(window).map_err(|error| error.to_string())?;
 
     // Use always-on-bottom top-level mode so keyboard input works reliably.
-    window.set_always_on_top(false)?;
-    window.set_always_on_bottom(true)?;
-    window.set_skip_taskbar(true)?;
-    window.set_decorations(false)?;
-    window.set_resizable(false)?;
-    window.set_fullscreen(false)?;
-    window.set_ignore_cursor_events(false)?;
-    window.set_position(Position::Physical(PhysicalPosition::new(rect.x, rect.y)))?;
-    window.set_size(Size::Physical(PhysicalSize::new(
-        rect.width as u32,
-        rect.height as u32,
-    )))?;
-    window.show()?;
-    window.unminimize()?;
-    window.set_focus()?;
+    window
+        .set_always_on_top(false)
+        .map_err(|error| error.to_string())?;
+    window
+        .set_always_on_bottom(true)
+        .map_err(|error| error.to_string())?;
+    window
+        .set_skip_taskbar(true)
+        .map_err(|error| error.to_string())?;
+    window
+        .set_decorations(false)
+        .map_err(|error| error.to_string())?;
+    window
+        .set_resizable(false)
+        .map_err(|error| error.to_string())?;
+    window
+        .set_fullscreen(false)
+        .map_err(|error| error.to_string())?;
+    window
+        .set_ignore_cursor_events(false)
+        .map_err(|error| error.to_string())?;
+    apply_desktop_rect_to_window(window, rect)?;
+    window.show().map_err(|error| error.to_string())?;
+    window.unminimize().map_err(|error| error.to_string())?;
+    window.set_focus().map_err(|error| error.to_string())?;
 
     Ok(())
 }
@@ -282,9 +516,13 @@ fn setup_tray_icon<R: tauri::Runtime>(app: &tauri::App<R>) -> tauri::Result<()> 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
-        .invoke_handler(tauri::generate_handler![open_external_url])
+        .invoke_handler(tauri::generate_handler![
+            open_external_url,
+            reset_floating_window_position
+        ])
         .on_page_load(|window, _payload| {
             install_external_open_bridge(window);
+            install_floating_reset_button(window);
         })
         .setup(|app| {
             #[cfg(desktop)]

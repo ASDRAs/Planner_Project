@@ -27,6 +27,27 @@ describe('classifyByRules', () => {
     expect(result.category).toBe('GAME_DESIGN');
   });
 
+  it('should not classify broad game developer wording as GAME_DESIGN by itself', () => {
+    const result = classifyByRules('게임개발자', false);
+    expect(result.category).toBe('THOUGHT');
+    expect(result.confidence).toBeLessThan(0.75);
+  });
+
+  it('should let study signals override broad game developer wording', () => {
+    const result = classifyByRules('게임개발자 공부', false);
+    expect(result.category).toBe('STUDY');
+  });
+
+  it('should let todo signals override broad game developer wording', () => {
+    const result = classifyByRules('게임개발자 포트폴리오 제출', true);
+    expect(result.category).toBe('TODO');
+  });
+
+  it('should still classify explicit game design phrases as GAME_DESIGN', () => {
+    const result = classifyByRules('게임 기획에서 보상 루프 설계', false);
+    expect(result.category).toBe('GAME_DESIGN');
+  });
+
   it('should classify THOUGHT', () => {
     const result = classifyByRules('만들어진 신 / 기도하다', false);
     expect(result.category).toBe('THOUGHT');

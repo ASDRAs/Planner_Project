@@ -2,7 +2,7 @@ import { ClassificationResult, ParseContext, Category } from './types';
 import { parseFolder } from './parser/folder';
 import { parseDateExpressions } from './parser/date';
 import { classifyByRules } from './classify/rules';
-import { classifyWithLLM } from './classify/llm';
+import { classifyWithLLM, isLLMClassifierConfigured } from './classify/llm';
 import { getLocalDateString } from '../dateUtils';
 
 export async function processMemo(rawInput: string, existingFolders?: Record<string, Category>): Promise<ClassificationResult> {
@@ -43,7 +43,9 @@ export async function processMemo(rawInput: string, existingFolders?: Record<str
   if (normalizedInput.includes('개발') || normalizedInput.includes('구현') || normalizedInput.includes('tdd') || normalizedInput.includes('spec-first')) {
     tags.push('개발방법론');
   }
-  if (normalizedInput.includes('기획') || normalizedInput.includes('플레이어') || normalizedInput.includes('achievers')) {
+  const hasGameDesignTagSignal =
+    /game design|achievers|성취형|플레이어|레벨 상승|재미|난이도|루프|보상|도전|메커닉|튜토리얼|게임\s*(기획|설계|디자인|시스템|경제|밸런스)/.test(normalizedInput);
+  if (hasGameDesignTagSignal) {
     tags.push('게임기획');
   }
   if (normalizedInput.includes('유형') || /성취형|탐험형|사교형|살해형/.test(normalizedInput)) {
@@ -64,9 +66,9 @@ export async function processMemo(rawInput: string, existingFolders?: Record<str
   };
 
   // 4. LLM Fallback - only if not forced by sticky folder
-  if (confidence < 0.75 && !stickyFolderContext) {
+  if (confidence < 0.75 && !stickyFolderContext && isLLMClassifierConfigured()) {
     try {
-      const llmResult = await classifyWithLLM(afterFolder, today, dayOfWeek, { forcedCategory: folder, forcedFolder: folder });
+      const llmResult = await classifyWithLLM(afterFolder, today, dayOfWeek, { forcedFolder: folder });
       
       return {
         ...baseResult,
